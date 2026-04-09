@@ -184,8 +184,19 @@ html, body { height: 100%; overflow: hidden; background: #1a1a2e; color: #eee; f
     </div>
     <div>
       <div class="panel-title">GITHUB SETUP</div>
-      <div style="font-size:10px; color:#888; margin-bottom:4px;">Parent: paste a token to enable Save to Game</div>
-      <input type="password" id="gh-token" placeholder="GitHub token" style="width:100%; padding:6px; background:#1a1a3e; border:1px solid #444; color:#fff; font-family:monospace; font-size:11px; border-radius:4px; margin-bottom:4px;">
+      <details style="font-size:10px; color:#aaa; margin-bottom:6px; cursor:pointer;">
+        <summary style="color:#e94560; font-size:11px;">How to get a token</summary>
+        <ol style="padding-left:16px; margin:6px 0; line-height:1.6; color:#ccc;">
+          <li>Go to <a href="https://github.com/settings/tokens?type=beta" target="_blank" rel="noopener" style="color:#88ccff;">github.com/settings/tokens</a></li>
+          <li>Click <b>"Generate new token"</b></li>
+          <li>Name it <b>Round Paws Editor</b></li>
+          <li>Under <b>Repository access</b>, select <b>"Only select repositories"</b> and pick <b>RoundPaws</b></li>
+          <li>Under <b>Permissions &gt; Repository permissions</b>, set <b>Contents</b> to <b>Read and write</b></li>
+          <li>Click <b>"Generate token"</b></li>
+          <li>Copy the token and paste it below</li>
+        </ol>
+      </details>
+      <input type="password" id="gh-token" placeholder="Paste token here" style="width:100%; padding:6px; background:#1a1a3e; border:1px solid #444; color:#fff; font-family:monospace; font-size:11px; border-radius:4px; margin-bottom:4px;">
       <button class="export-btn secondary" id="btn-save-token" style="font-size:11px; min-height:36px;">Save Token</button>
       <div id="token-status" style="font-size:10px; margin-top:4px; min-height:14px;"></div>
     </div>
