@@ -3,6 +3,7 @@
  *
  * Serves static files over HTTPS and provides an API for the pixel
  * art editor to save PNGs directly to the tiles/ folder.
+ * The game auto-reloads sprites by polling /api/tile-version.
  *
  * Usage:  node server.js
  * Then:   https://localhost:3000/editor.html
@@ -14,7 +15,6 @@
 var https = require('https');
 var fs = require('fs');
 var path = require('path');
-var crypto = require('crypto');
 var childProcess = require('child_process');
 
 var PORT = 3000;
@@ -22,6 +22,9 @@ var ROOT = __dirname;
 var CERT_DIR = path.join(ROOT, '.cert');
 var KEY_PATH = path.join(CERT_DIR, 'localhost.key');
 var CERT_PATH = path.join(CERT_DIR, 'localhost.crt');
+
+// Incremented every time a tile changes — game polls this to detect changes
+var tileVersion = 0;
 
 var MIME = {
     '.html': 'text/html',
@@ -49,7 +52,6 @@ function ensureCert(callback) {
 
     console.log('Generating self-signed certificate...');
 
-    // Use openssl to generate a self-signed cert for localhost
     var cmd = 'openssl req -x509 -newkey rsa:2048 -nodes' +
         ' -keyout ' + KEY_PATH +
         ' -out ' + CERT_PATH +
@@ -89,16 +91,25 @@ function handleRequest(req, res) {
                 var filePath = path.join(ROOT, 'tiles', filename);
                 var data = Buffer.from(json.data, 'base64');
                 fs.writeFileSync(filePath, data);
-                console.log('Saved tiles/' + filename + ' (' + data.length + ' bytes)');
+                tileVersion++;
+                console.log('Saved tiles/' + filename + ' (v' + tileVersion + ')');
                 res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ ok: true }));
-                // Notify game clients to reload sprites
-                wsBroadcast('reload-tiles');
+                res.end(JSON.stringify({ ok: true, version: tileVersion }));
             } catch (e) {
                 res.writeHead(500, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ error: e.message }));
             }
         });
+        return;
+    }
+
+    // API: tile version (polled by game for live reload)
+    if (req.method === 'GET' && req.url === '/api/tile-version') {
+        res.writeHead(200, {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache, no-store'
+        });
+        res.end(JSON.stringify({ version: tileVersion }));
         return;
     }
 
@@ -141,59 +152,7 @@ function handleRequest(req, res) {
 }
 
 // ---------------------------------------------------------------
-// WebSocket for live reload (minimal implementation, no deps)
-// ---------------------------------------------------------------
-
-var wsClients = [];
-
-function upgradeToWebSocket(req, socket) {
-    var key = req.headers['sec-websocket-key'];
-    if (!key) { socket.destroy(); return; }
-
-    var accept = crypto.createHash('sha1')
-        .update(key + '258EAFA5-E914-47DA-95CA-5AB9B1540F35')
-        .digest('base64');
-
-    socket.write(
-        'HTTP/1.1 101 Switching Protocols\r\n' +
-        'Upgrade: websocket\r\n' +
-        'Connection: Upgrade\r\n' +
-        'Sec-WebSocket-Accept: ' + accept + '\r\n' +
-        '\r\n'
-    );
-
-    wsClients.push(socket);
-    socket.on('close', function () {
-        wsClients = wsClients.filter(function (s) { return s !== socket; });
-    });
-    socket.on('error', function () {
-        wsClients = wsClients.filter(function (s) { return s !== socket; });
-    });
-}
-
-/** Send a WebSocket text frame to all connected clients. */
-function wsBroadcast(msg) {
-    var payload = Buffer.from(msg);
-    var frame;
-    if (payload.length < 126) {
-        frame = Buffer.alloc(2 + payload.length);
-        frame[0] = 0x81; // text frame, fin
-        frame[1] = payload.length;
-        payload.copy(frame, 2);
-    } else {
-        frame = Buffer.alloc(4 + payload.length);
-        frame[0] = 0x81;
-        frame[1] = 126;
-        frame.writeUInt16BE(payload.length, 2);
-        payload.copy(frame, 4);
-    }
-    for (var i = 0; i < wsClients.length; i++) {
-        try { wsClients[i].write(frame); } catch (e) {}
-    }
-}
-
-// ---------------------------------------------------------------
-// Watch tiles/ for changes
+// Watch tiles/ for changes (from external edits, not just API)
 // ---------------------------------------------------------------
 
 function watchTiles() {
@@ -201,13 +160,11 @@ function watchTiles() {
     var debounce = null;
 
     fs.watch(tilesDir, function (eventType, filename) {
-        // On macOS, filename can be null for some events — treat as a change
         if (filename && !filename.endsWith('.png')) return;
-        // Debounce rapid changes (e.g. editor saving multiple frames)
         clearTimeout(debounce);
         debounce = setTimeout(function () {
-            console.log('Tile changed: ' + (filename || '(unknown)') + ' — notifying browser');
-            wsBroadcast('reload-tiles');
+            tileVersion++;
+            console.log('Tile changed: ' + (filename || '(unknown)') + ' (v' + tileVersion + ')');
         }, 300);
     });
 }
@@ -224,25 +181,13 @@ ensureCert(function () {
 
     var server = https.createServer(options, handleRequest);
 
-    // Handle WebSocket upgrade requests
-    server.on('upgrade', function (req, socket, head) {
-        if (req.url === '/ws') {
-            upgradeToWebSocket(req, socket);
-        } else {
-            socket.destroy();
-        }
-    });
-
     server.listen(PORT, function () {
         console.log('');
         console.log('Round Paws server running at https://localhost:' + PORT);
         console.log('Game:   https://localhost:' + PORT + '/');
         console.log('Editor: https://localhost:' + PORT + '/editor.html');
         console.log('');
-        console.log('Watching tiles/ for changes — game auto-reloads sprites.');
-        console.log('');
-        console.log('First time? Your browser will show a security warning.');
-        console.log('Click "Advanced" > "Proceed to localhost" to continue.');
+        console.log('Tiles auto-reload in the game when changed.');
     });
 
     watchTiles();
