@@ -92,6 +92,8 @@ function handleRequest(req, res) {
                 console.log('Saved tiles/' + filename + ' (' + data.length + ' bytes)');
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ ok: true }));
+                // Notify game clients to reload sprites
+                wsBroadcast('reload-tiles');
             } catch (e) {
                 res.writeHead(500, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ error: e.message }));
@@ -196,11 +198,12 @@ function watchTiles() {
     var debounce = null;
 
     fs.watch(tilesDir, function (eventType, filename) {
-        if (!filename || !filename.endsWith('.png')) return;
+        // On macOS, filename can be null for some events — treat as a change
+        if (filename && !filename.endsWith('.png')) return;
         // Debounce rapid changes (e.g. editor saving multiple frames)
         clearTimeout(debounce);
         debounce = setTimeout(function () {
-            console.log('Tile changed: ' + filename + ' — notifying browser');
+            console.log('Tile changed: ' + (filename || '(unknown)') + ' — notifying browser');
             wsBroadcast('reload-tiles');
         }, 300);
     });
