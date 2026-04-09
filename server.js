@@ -136,6 +136,77 @@ function handleRequest(req, res) {
 }
 
 // ---------------------------------------------------------------
+// WebSocket for live reload (minimal implementation, no deps)
+// ---------------------------------------------------------------
+
+var wsClients = [];
+
+function upgradeToWebSocket(req, socket) {
+    var key = req.headers['sec-websocket-key'];
+    if (!key) { socket.destroy(); return; }
+
+    var accept = crypto.createHash('sha1')
+        .update(key + '258EAFA5-E914-47DA-95CA-5AB9B1540F35')
+        .digest('base64');
+
+    socket.write(
+        'HTTP/1.1 101 Switching Protocols\r\n' +
+        'Upgrade: websocket\r\n' +
+        'Connection: Upgrade\r\n' +
+        'Sec-WebSocket-Accept: ' + accept + '\r\n' +
+        '\r\n'
+    );
+
+    wsClients.push(socket);
+    socket.on('close', function () {
+        wsClients = wsClients.filter(function (s) { return s !== socket; });
+    });
+    socket.on('error', function () {
+        wsClients = wsClients.filter(function (s) { return s !== socket; });
+    });
+}
+
+/** Send a WebSocket text frame to all connected clients. */
+function wsBroadcast(msg) {
+    var payload = Buffer.from(msg);
+    var frame;
+    if (payload.length < 126) {
+        frame = Buffer.alloc(2 + payload.length);
+        frame[0] = 0x81; // text frame, fin
+        frame[1] = payload.length;
+        payload.copy(frame, 2);
+    } else {
+        frame = Buffer.alloc(4 + payload.length);
+        frame[0] = 0x81;
+        frame[1] = 126;
+        frame.writeUInt16BE(payload.length, 2);
+        payload.copy(frame, 4);
+    }
+    for (var i = 0; i < wsClients.length; i++) {
+        try { wsClients[i].write(frame); } catch (e) {}
+    }
+}
+
+// ---------------------------------------------------------------
+// Watch tiles/ for changes
+// ---------------------------------------------------------------
+
+function watchTiles() {
+    var tilesDir = path.join(ROOT, 'tiles');
+    var debounce = null;
+
+    fs.watch(tilesDir, function (eventType, filename) {
+        if (!filename || !filename.endsWith('.png')) return;
+        // Debounce rapid changes (e.g. editor saving multiple frames)
+        clearTimeout(debounce);
+        debounce = setTimeout(function () {
+            console.log('Tile changed: ' + filename + ' — notifying browser');
+            wsBroadcast('reload-tiles');
+        }, 300);
+    });
+}
+
+// ---------------------------------------------------------------
 // Start server
 // ---------------------------------------------------------------
 
@@ -147,13 +218,26 @@ ensureCert(function () {
 
     var server = https.createServer(options, handleRequest);
 
+    // Handle WebSocket upgrade requests
+    server.on('upgrade', function (req, socket, head) {
+        if (req.url === '/ws') {
+            upgradeToWebSocket(req, socket);
+        } else {
+            socket.destroy();
+        }
+    });
+
     server.listen(PORT, function () {
         console.log('');
         console.log('Round Paws server running at https://localhost:' + PORT);
         console.log('Game:   https://localhost:' + PORT + '/');
         console.log('Editor: https://localhost:' + PORT + '/editor.html');
         console.log('');
+        console.log('Watching tiles/ for changes — game auto-reloads sprites.');
+        console.log('');
         console.log('First time? Your browser will show a security warning.');
         console.log('Click "Advanced" > "Proceed to localhost" to continue.');
     });
+
+    watchTiles();
 });

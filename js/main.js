@@ -366,6 +366,25 @@ window.Game = window.Game || {};
         requestAnimationFrame(gameLoop);
     }
 
+    /** Connect to local dev server's WebSocket for live tile reload. */
+    function connectLiveReload() {
+        if (location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') return;
+        try {
+            var ws = new WebSocket('wss://' + location.host + '/ws');
+            ws.onmessage = function (e) {
+                if (e.data === 'reload-tiles') {
+                    console.log('Live reload: tiles changed, reloading sprites...');
+                    Game.Sprites.clearCache();
+                    Game.Sprites.loadImages(function () {});
+                }
+            };
+            ws.onclose = function () {
+                // Reconnect after a delay
+                setTimeout(connectLiveReload, 3000);
+            };
+        } catch (e) {}
+    }
+
     window.addEventListener('load', function () {
         Game.Sprites.loadImages(function () {
             Game.Renderer.init();
@@ -384,6 +403,7 @@ window.Game = window.Game || {};
             document.addEventListener('keydown', resumeAudio);
             document.addEventListener('click', resumeAudio);
 
+            connectLiveReload();
             gameLoop();
         });
     });
