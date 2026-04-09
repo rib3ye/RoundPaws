@@ -101,51 +101,73 @@ Game.Sprites = (function () {
     // ---------------------------------------------------------------
 
     /** Round Paws the cat — 16x16, facing right, 4 walk frames. */
+    /** Round Paws the cat — 16x16, side view facing right, 4-frame run cycle. */
     function drawCat(ctx, frame) {
         var f = frame || 0;
 
-        // Body (dark circle)
+        // Body
         rect(ctx, 4, 4, 8, 8, '#222');
 
         // White muzzle area
-        rect(ctx, 6, 7, 4, 1, '#fff');
-        rect(ctx, 7, 8, 2, 1, '#fff');
+        rect(ctx, 9, 7, 3, 2, '#fff');
+        rect(ctx, 10, 9, 2, 1, '#fff');
 
         // Pink nose
-        px(ctx, 7, 7, '#f99');
-        px(ctx, 8, 7, '#f99');
+        px(ctx, 11, 7, '#f99');
 
-        // Green eyes
-        rect(ctx, 5, 5, 2, 2, '#4f4');
+        // Eye — green with dark pupil
         rect(ctx, 9, 5, 2, 2, '#4f4');
-        px(ctx, 6, 5, '#0a0');   // left pupil
-        px(ctx, 10, 5, '#0a0');  // right pupil
+        px(ctx, 10, 5, '#0a0');
 
         // Ears
-        px(ctx, 4, 3, '#222');
-        px(ctx, 5, 2, '#222');
-        px(ctx, 5, 3, '#222');
-        px(ctx, 11, 3, '#222');
-        px(ctx, 10, 2, '#222');
+        px(ctx, 7, 3, '#222');
+        px(ctx, 8, 2, '#222');
+        px(ctx, 8, 3, '#222');
         px(ctx, 10, 3, '#222');
+        px(ctx, 11, 2, '#222');
+        px(ctx, 11, 3, '#222');
 
         // Pink inner ears
-        px(ctx, 5, 3, '#a0407a');
-        px(ctx, 10, 3, '#a0407a');
-
-        // Legs — alternate position each frame for walk cycle
-        if (f % 2 === 0) {
-            rect(ctx, 5, 12, 2, 2, '#222');
-            rect(ctx, 9, 12, 2, 2, '#222');
-        } else {
-            rect(ctx, 4, 12, 2, 2, '#222');
-            rect(ctx, 10, 12, 2, 2, '#222');
-        }
+        px(ctx, 8, 3, '#a0407a');
+        px(ctx, 11, 3, '#a0407a');
 
         // Tail (curves upward)
-        px(ctx, 12, 6, '#222');
-        px(ctx, 13, 5, '#222');
-        px(ctx, 13, 4, '#222');
+        px(ctx, 3, 6, '#222');
+        px(ctx, 2, 5, '#222');
+        px(ctx, 2, 4, '#222');
+
+        // Arms & legs — 4-frame run cycle
+        if (f === 0) {
+            // Neutral stance
+            rect(ctx, 5, 12, 2, 2, '#222');
+            rect(ctx, 9, 12, 2, 2, '#222');
+            // Arms at sides
+            px(ctx, 4, 9, '#222');
+            px(ctx, 11, 9, '#222');
+        } else if (f === 1) {
+            // Front leg forward, back leg back (stride)
+            rect(ctx, 10, 12, 2, 2, '#222');
+            rect(ctx, 4, 12, 2, 2, '#222');
+            // Front arm forward, back arm back
+            px(ctx, 12, 8, '#222');
+            px(ctx, 13, 8, '#222');
+            px(ctx, 3, 10, '#222');
+        } else if (f === 2) {
+            // Mid-run hop — legs tucked
+            rect(ctx, 6, 11, 2, 2, '#222');
+            rect(ctx, 8, 11, 2, 2, '#222');
+            // Arms tucked
+            px(ctx, 4, 9, '#222');
+            px(ctx, 11, 9, '#222');
+        } else {
+            // Opposite stride
+            rect(ctx, 4, 12, 2, 2, '#222');
+            rect(ctx, 10, 12, 2, 2, '#222');
+            // Back arm forward, front arm back
+            px(ctx, 3, 8, '#222');
+            px(ctx, 12, 10, '#222');
+            px(ctx, 13, 10, '#222');
+        }
     }
 
     /** Happy cat for title screen — 32x32, ^_^ eyes, tail up. */
@@ -276,33 +298,38 @@ Game.Sprites = (function () {
     function drawCrab(ctx, frame) {
         var f = frame || 0;
 
-        // Body
-        rect(ctx, 3, 4, 10, 6, '#e44');
-        rect(ctx, 4, 3, 8, 1, '#e44');
+        // Body — bright red with yellow belly highlight
+        rect(ctx, 3, 4, 10, 6, '#ff2222');
+        rect(ctx, 4, 3, 8, 1, '#ff2222');
+        rect(ctx, 4, 8, 8, 2, '#ff6644'); // lighter belly
 
         // Eye stalks
-        rect(ctx, 4, 1, 2, 3, '#e44');
-        rect(ctx, 10, 1, 2, 3, '#e44');
+        rect(ctx, 4, 1, 2, 3, '#ff2222');
+        rect(ctx, 10, 1, 2, 3, '#ff2222');
 
-        // Eyes (dark dots on stalks)
-        px(ctx, 4, 1, '#111');
+        // Eyes — white with black pupils
+        px(ctx, 4, 1, '#fff');
         px(ctx, 5, 1, '#111');
-        px(ctx, 10, 1, '#111');
+        px(ctx, 10, 1, '#fff');
         px(ctx, 11, 1, '#111');
 
-        // Claws — animate up/down
+        // Claws — animate up/down, yellow tips
         if (f % 2 === 0) {
-            rect(ctx, 0, 4, 3, 3, '#e44');
-            rect(ctx, 13, 4, 3, 3, '#e44');
+            rect(ctx, 0, 4, 3, 3, '#ff2222');
+            rect(ctx, 13, 4, 3, 3, '#ff2222');
+            px(ctx, 0, 4, '#ffcc00');
+            px(ctx, 15, 4, '#ffcc00');
         } else {
-            rect(ctx, 0, 3, 3, 3, '#e44');
-            rect(ctx, 13, 3, 3, 3, '#e44');
+            rect(ctx, 0, 3, 3, 3, '#ff2222');
+            rect(ctx, 13, 3, 3, 3, '#ff2222');
+            px(ctx, 0, 3, '#ffcc00');
+            px(ctx, 15, 3, '#ffcc00');
         }
 
-        // Legs
-        rect(ctx, 4, 10, 2, 2, '#c33');
-        rect(ctx, 7, 10, 2, 2, '#c33');
-        rect(ctx, 10, 10, 2, 2, '#c33');
+        // Legs — dark for contrast
+        rect(ctx, 4, 10, 2, 2, '#991111');
+        rect(ctx, 7, 10, 2, 2, '#991111');
+        rect(ctx, 10, 10, 2, 2, '#991111');
     }
 
     // ---------------------------------------------------------------
@@ -313,23 +340,27 @@ Game.Sprites = (function () {
     function drawCarrot(ctx, bobOffset) {
         var y = bobOffset || 0;
 
-        // Orange body (tapers to a point)
-        rect(ctx, 3, 4 + y, 2, 8, '#f80');
-        rect(ctx, 2, 6 + y, 4, 4, '#f80');
-        px(ctx, 4, 11 + y, '#f80');
-        px(ctx, 3, 12 + y, '#e70'); // darker tip
+        // Bright orange body (tapers to a point)
+        rect(ctx, 3, 4 + y, 2, 8, '#ff8800');
+        rect(ctx, 2, 6 + y, 4, 4, '#ff9922');
+        px(ctx, 4, 11 + y, '#ff7700');
+        px(ctx, 3, 12 + y, '#ee6600'); // darker tip
+        // Highlight stripe
+        px(ctx, 3, 6 + y, '#ffbb44');
+        px(ctx, 3, 7 + y, '#ffbb44');
 
-        // Green leafy top
-        rect(ctx, 2, 2 + y, 4, 3, '#4a4');
-        px(ctx, 3, 1 + y, '#4a4');
-        px(ctx, 4, 1 + y, '#4a4');
+        // Bright green leafy top
+        rect(ctx, 2, 2 + y, 4, 3, '#22cc22');
+        px(ctx, 3, 1 + y, '#22cc22');
+        px(ctx, 4, 1 + y, '#22cc22');
+        px(ctx, 3, 2 + y, '#44ee44'); // leaf highlight
     }
 
     /** Carrot projectile — 8x4, horizontal flying carrot. */
     function drawCarrotProjectile(ctx) {
-        rect(ctx, 0, 1, 6, 2, '#f80'); // orange body
-        rect(ctx, 6, 1, 2, 2, '#4a4'); // green tail
-        px(ctx, 0, 2, '#e70');          // darker tip
+        rect(ctx, 0, 1, 6, 2, '#ff8800'); // bright orange body
+        rect(ctx, 6, 1, 2, 2, '#22cc22'); // bright green tail
+        px(ctx, 0, 2, '#ee6600');          // darker tip
     }
 
     /** Level exit flag — 8x16, pole with waving red flag. */

@@ -666,6 +666,10 @@ Game.Music = (function () {
         step = 0;
     }
 
+    function getVolume() {
+        return volume;
+    }
+
     function setVolume(v) {
         volume = v;
         if (masterGain && !muted) masterGain.gain.value = v;
@@ -871,6 +875,7 @@ Game.Music = (function () {
         init: init,
         play: play,
         stop: stop,
+        getVolume: getVolume,
         setVolume: setVolume,
         sfx: sfx,
         toggleMute: toggleMute,

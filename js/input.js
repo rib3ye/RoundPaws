@@ -28,6 +28,11 @@ Game.Input = (function () {
     /** Bind keyboard listeners. Call once at startup. */
     function init() {
         window.addEventListener('keydown', function (e) {
+            // Shift+R: hard reload (clear cache and refresh page)
+            if (e.code === 'KeyR' && e.shiftKey) {
+                location.reload(true);
+                return;
+            }
             keys[e.code] = true;
             e.preventDefault();
         });
@@ -74,9 +79,11 @@ Game.Input = (function () {
             case 'down':   return justPressed['KeyS'];
             case 'throw':  return justPressed['KeyK'];
             case 'start':  return justPressed['Enter'] || justPressed['Space'];
-            case 'mute':   return justPressed['KeyM'];
-            case 'reload': return justPressed['KeyR'];
-            default:       return false;
+            case 'mute':     return justPressed['KeyM'];
+            case 'reload':   return justPressed['KeyR'];
+            case 'volUp':    return justPressed['ArrowUp'];
+            case 'volDown':  return justPressed['ArrowDown'];
+            default:         return false;
         }
     }
 

@@ -1,0 +1,795 @@
+/**
+ * Pixel Art Editor for Round Paws
+ *
+ * Kid-friendly, iPad-optimized pixel art editor for creating custom
+ * sprite overrides. Draws on a zoomed grid, exports correctly-named
+ * PNGs ready to drop into the tiles/ directory.
+ */
+(function () {
+    // ---------------------------------------------------------------
+    // Sprite definitions (mirrors spriteInfo in sprites.js)
+    // ---------------------------------------------------------------
+
+    var SPRITES = [
+        { name: 'cat', w: 16, h: 16, frames: 4, category: 'Player', label: 'Cat (right)' },
+        { name: 'cat_left', w: 16, h: 16, frames: 4, category: 'Player', label: 'Cat (left)' },
+        { name: 'cat_slide', w: 16, h: 10, frames: 1, category: 'Player', label: 'Slide (right)' },
+        { name: 'cat_slide_left', w: 16, h: 10, frames: 1, category: 'Player', label: 'Slide (left)' },
+        { name: 'happy_cat', w: 32, h: 32, frames: 1, category: 'Screens', label: 'Happy Cat' },
+        { name: 'sleeping_cat', w: 32, h: 16, frames: 3, category: 'Screens', label: 'Sleeping Cat' },
+        { name: 'crab', w: 16, h: 12, frames: 4, category: 'Enemy', label: 'Crab' },
+        { name: 'carrot', w: 8, h: 14, frames: 1, category: 'Items', label: 'Carrot' },
+        { name: 'carrot_projectile', w: 8, h: 4, frames: 1, category: 'Items', label: 'Carrot Shot' },
+        { name: 'carrot_projectile_left', w: 8, h: 4, frames: 1, category: 'Items', label: 'Carrot Shot (L)' },
+        { name: 'flag', w: 8, h: 16, frames: 2, category: 'Items', label: 'Flag' },
+        { name: 'wood_plank', w: 16, h: 16, frames: 1, category: 'Tiles', label: 'Wood Plank' },
+        { name: 'hull_wall', w: 16, h: 16, frames: 1, category: 'Tiles', label: 'Hull Wall' },
+        { name: 'water', w: 16, h: 16, frames: 4, category: 'Tiles', label: 'Water' },
+        { name: 'rope', w: 16, h: 16, frames: 1, category: 'Tiles', label: 'Rope' },
+        { name: 'barrel', w: 16, h: 16, frames: 1, category: 'Tiles', label: 'Barrel' },
+        { name: 'mast', w: 16, h: 16, frames: 1, category: 'Tiles', label: 'Mast' },
+        { name: 'thin_platform', w: 16, h: 16, frames: 1, category: 'Tiles', label: 'Platform' }
+    ];
+
+    // NES-inspired color palette
+    var PALETTE = [
+        null,      // transparent
+        '#000000', '#ffffff', '#222222', '#555555',
+        '#888888', '#bbbbbb',
+        '#ff0000', '#ff8800', '#ffcc00', '#ffff00',
+        '#00cc00', '#0088ff', '#0000cc', '#8800cc',
+        '#ff44aa', '#884400', '#ff6644', '#44ffaa',
+        '#88ccff', '#222266'
+    ];
+
+    // ---------------------------------------------------------------
+    // Editor state
+    // ---------------------------------------------------------------
+
+    var currentSprite = SPRITES[0];
+    var currentFrame = 0;
+    var currentTool = 'pencil';
+    var currentColor = '#222222';
+    var showGrid = true;
+    var pixelSize = 24; // size of each pixel on screen
+
+    // Pixel data: 2D array [row][col] of color strings or null (transparent)
+    var pixels = [];
+    // Per-frame storage: frameData[spriteName][frameIndex] = pixels[][]
+    var frameData = {};
+
+    // Undo/redo stacks
+    var undoStack = [];
+    var redoStack = [];
+    var MAX_UNDO = 30;
+
+    // Drawing state
+    var isDrawing = false;
+
+    // Animation preview
+    var animTimer = null;
+    var animFrame = 0;
+
+    // DOM elements
+    var canvas, ctx;
+    var preview1x, preview1xCtx;
+    var preview4x, preview4xCtx;
+    var animPreview, animPreviewCtx;
+
+    // ---------------------------------------------------------------
+    // Initialization
+    // ---------------------------------------------------------------
+
+    function init() {
+        canvas = document.getElementById('editor-canvas');
+        ctx = canvas.getContext('2d');
+        preview1x = document.getElementById('preview-1x');
+        preview1xCtx = preview1x.getContext('2d');
+        preview4x = document.getElementById('preview-4x');
+        preview4xCtx = preview4x.getContext('2d');
+        animPreview = document.getElementById('anim-preview');
+        animPreviewCtx = animPreview.getContext('2d');
+
+        buildSidebar();
+        buildToolbar();
+        buildPalette();
+        bindEvents();
+        selectSprite(SPRITES[0], 0);
+    }
+
+    // ---------------------------------------------------------------
+    // Sidebar: sprite picker
+    // ---------------------------------------------------------------
+
+    function buildSidebar() {
+        var sidebar = document.getElementById('sidebar');
+        var categories = ['Player', 'Enemy', 'Items', 'Tiles', 'Screens'];
+        var html = '';
+
+        for (var ci = 0; ci < categories.length; ci++) {
+            var cat = categories[ci];
+            html += '<h2>' + cat + '</h2>';
+            for (var si = 0; si < SPRITES.length; si++) {
+                var sp = SPRITES[si];
+                if (sp.category !== cat) continue;
+                html += '<button class="sprite-btn" data-index="' + si + '">';
+                html += '<canvas id="thumb-' + sp.name + '" width="' + (sp.w * 2) + '" height="' + (sp.h * 2) + '"></canvas>';
+                html += '<div class="info"><div class="name">' + sp.label + '</div>';
+                html += '<div class="dims">' + sp.w + 'x' + sp.h;
+                if (sp.frames > 1) html += ' (' + sp.frames + ' frames)';
+                html += '</div></div></button>';
+            }
+        }
+        sidebar.innerHTML = html;
+
+        // Render reference thumbnails from programmatic sprites
+        for (var i = 0; i < SPRITES.length; i++) {
+            var sp = SPRITES[i];
+            var thumb = document.getElementById('thumb-' + sp.name);
+            if (thumb) {
+                var tctx = thumb.getContext('2d');
+                tctx.imageSmoothingEnabled = false;
+                var src = Game.Sprites.get(sp.name, 0);
+                tctx.drawImage(src, 0, 0, sp.w * 2, sp.h * 2);
+            }
+        }
+
+        // Click handlers
+        var btns = sidebar.querySelectorAll('.sprite-btn');
+        for (var b = 0; b < btns.length; b++) {
+            btns[b].addEventListener('click', function () {
+                var idx = parseInt(this.getAttribute('data-index'));
+                selectSprite(SPRITES[idx], 0);
+            });
+        }
+    }
+
+    function updateSidebarActive() {
+        var btns = document.querySelectorAll('.sprite-btn');
+        for (var i = 0; i < btns.length; i++) {
+            var idx = parseInt(btns[i].getAttribute('data-index'));
+            btns[i].classList.toggle('active', SPRITES[idx] === currentSprite);
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // Frame tabs (for multi-frame sprites)
+    // ---------------------------------------------------------------
+
+    function buildFrameTabs() {
+        var wrap = document.getElementById('frame-tabs');
+        if (currentSprite.frames <= 1) {
+            wrap.style.display = 'none';
+            document.getElementById('btn-download-all').style.display = 'none';
+            return;
+        }
+        wrap.style.display = 'flex';
+        document.getElementById('btn-download-all').style.display = 'block';
+
+        var html = '';
+        for (var f = 0; f < currentSprite.frames; f++) {
+            html += '<button class="frame-tab' + (f === currentFrame ? ' active' : '') + '" data-frame="' + f + '">Frame ' + f + '</button>';
+        }
+        wrap.innerHTML = html;
+
+        var tabs = wrap.querySelectorAll('.frame-tab');
+        for (var t = 0; t < tabs.length; t++) {
+            tabs[t].addEventListener('click', function () {
+                saveCurrentFrame();
+                currentFrame = parseInt(this.getAttribute('data-frame'));
+                loadCurrentFrame();
+                buildFrameTabs();
+                redrawCanvas();
+                updatePreviews();
+            });
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // Sprite selection & pixel data management
+    // ---------------------------------------------------------------
+
+    function selectSprite(sprite, frame) {
+        saveCurrentFrame();
+        currentSprite = sprite;
+        currentFrame = frame || 0;
+        loadCurrentFrame();
+        resizeCanvas();
+        buildFrameTabs();
+        updateSidebarActive();
+        updateFilenameDisplay();
+        redrawCanvas();
+        updatePreviews();
+        startAnimPreview();
+        undoStack = [];
+        redoStack = [];
+    }
+
+    function makeEmptyPixels(w, h) {
+        var p = [];
+        for (var r = 0; r < h; r++) {
+            p[r] = [];
+            for (var c = 0; c < w; c++) {
+                p[r][c] = null;
+            }
+        }
+        return p;
+    }
+
+    function clonePixels(px) {
+        var p = [];
+        for (var r = 0; r < px.length; r++) {
+            p[r] = px[r].slice();
+        }
+        return p;
+    }
+
+    function saveCurrentFrame() {
+        if (!currentSprite) return;
+        var key = currentSprite.name;
+        if (!frameData[key]) frameData[key] = {};
+        frameData[key][currentFrame] = clonePixels(pixels);
+    }
+
+    function loadCurrentFrame() {
+        var key = currentSprite.name;
+        if (frameData[key] && frameData[key][currentFrame]) {
+            pixels = clonePixels(frameData[key][currentFrame]);
+        } else {
+            // Load from programmatic sprite as starting point
+            pixels = loadFromProgrammatic(currentSprite.name, currentFrame);
+        }
+    }
+
+    function loadFromProgrammatic(name, frame) {
+        var src = Game.Sprites.get(name, frame);
+        var w = currentSprite.w;
+        var h = currentSprite.h;
+        var tmpCanvas = document.createElement('canvas');
+        tmpCanvas.width = w;
+        tmpCanvas.height = h;
+        var tmpCtx = tmpCanvas.getContext('2d');
+        tmpCtx.drawImage(src, 0, 0);
+        var imgData = tmpCtx.getImageData(0, 0, w, h);
+        var px = [];
+        for (var r = 0; r < h; r++) {
+            px[r] = [];
+            for (var c = 0; c < w; c++) {
+                var i = (r * w + c) * 4;
+                var a = imgData.data[i + 3];
+                if (a < 128) {
+                    px[r][c] = null;
+                } else {
+                    var red = imgData.data[i];
+                    var green = imgData.data[i + 1];
+                    var blue = imgData.data[i + 2];
+                    px[r][c] = '#' + hex(red) + hex(green) + hex(blue);
+                }
+            }
+        }
+        return px;
+    }
+
+    function hex(n) {
+        var s = n.toString(16);
+        return s.length < 2 ? '0' + s : s;
+    }
+
+    // ---------------------------------------------------------------
+    // Canvas sizing & rendering
+    // ---------------------------------------------------------------
+
+    function resizeCanvas() {
+        var mainEl = document.querySelector('.main');
+        var availW = mainEl.clientWidth - 32;
+        var availH = mainEl.clientHeight - 160;
+        var maxPixW = Math.floor(availW / currentSprite.w);
+        var maxPixH = Math.floor(availH / currentSprite.h);
+        pixelSize = Math.min(maxPixW, maxPixH, 32);
+        pixelSize = Math.max(pixelSize, 12);
+
+        canvas.width = currentSprite.w * pixelSize;
+        canvas.height = currentSprite.h * pixelSize;
+    }
+
+    function redrawCanvas() {
+        var w = currentSprite.w;
+        var h = currentSprite.h;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Draw checkerboard background for transparency
+        for (var r = 0; r < h; r++) {
+            for (var c = 0; c < w; c++) {
+                var x = c * pixelSize;
+                var y = r * pixelSize;
+                // Checkerboard
+                ctx.fillStyle = (r + c) % 2 === 0 ? '#444' : '#555';
+                ctx.fillRect(x, y, pixelSize, pixelSize);
+                // Pixel color
+                if (pixels[r] && pixels[r][c]) {
+                    ctx.fillStyle = pixels[r][c];
+                    ctx.fillRect(x, y, pixelSize, pixelSize);
+                }
+            }
+        }
+
+        // Grid lines
+        if (showGrid && pixelSize > 4) {
+            ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+            ctx.lineWidth = 1;
+            for (var gx = 0; gx <= w; gx++) {
+                ctx.beginPath();
+                ctx.moveTo(gx * pixelSize + 0.5, 0);
+                ctx.lineTo(gx * pixelSize + 0.5, h * pixelSize);
+                ctx.stroke();
+            }
+            for (var gy = 0; gy <= h; gy++) {
+                ctx.beginPath();
+                ctx.moveTo(0, gy * pixelSize + 0.5);
+                ctx.lineTo(w * pixelSize, gy * pixelSize + 0.5);
+                ctx.stroke();
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // Preview rendering
+    // ---------------------------------------------------------------
+
+    function updatePreviews() {
+        var w = currentSprite.w;
+        var h = currentSprite.h;
+
+        // 1x preview
+        preview1x.width = w;
+        preview1x.height = h;
+        preview1xCtx.clearRect(0, 0, w, h);
+        drawPixelsToCtx(preview1xCtx, pixels, w, h, 1);
+
+        // 4x preview
+        preview4x.width = w * 4;
+        preview4x.height = h * 4;
+        preview4xCtx.imageSmoothingEnabled = false;
+        preview4xCtx.clearRect(0, 0, w * 4, h * 4);
+        drawPixelsToCtx(preview4xCtx, pixels, w, h, 4);
+    }
+
+    function drawPixelsToCtx(tctx, px, w, h, scale) {
+        for (var r = 0; r < h; r++) {
+            for (var c = 0; c < w; c++) {
+                if (px[r] && px[r][c]) {
+                    tctx.fillStyle = px[r][c];
+                    tctx.fillRect(c * scale, r * scale, scale, scale);
+                }
+            }
+        }
+    }
+
+    function startAnimPreview() {
+        if (animTimer) clearInterval(animTimer);
+        var wrap = document.getElementById('anim-preview-wrap');
+        if (currentSprite.frames <= 1) {
+            wrap.style.display = 'none';
+            return;
+        }
+        wrap.style.display = 'block';
+        animFrame = 0;
+        var w = currentSprite.w;
+        var h = currentSprite.h;
+        animPreview.width = w * 4;
+        animPreview.height = h * 4;
+        animPreviewCtx.imageSmoothingEnabled = false;
+
+        animTimer = setInterval(function () {
+            animFrame = (animFrame + 1) % currentSprite.frames;
+            animPreviewCtx.clearRect(0, 0, w * 4, h * 4);
+            var key = currentSprite.name;
+            var px;
+            if (animFrame === currentFrame) {
+                px = pixels;
+            } else if (frameData[key] && frameData[key][animFrame]) {
+                px = frameData[key][animFrame];
+            } else {
+                px = loadFromProgrammatic(currentSprite.name, animFrame);
+            }
+            drawPixelsToCtx(animPreviewCtx, px, w, h, 4);
+        }, 200);
+    }
+
+    // ---------------------------------------------------------------
+    // Toolbar
+    // ---------------------------------------------------------------
+
+    function buildToolbar() {
+        var tools = [
+            { id: 'pencil', icon: '&#9998;', label: 'Draw' },
+            { id: 'eraser', icon: '&#9744;', label: 'Erase' },
+            { id: 'fill',   icon: '&#9727;', label: 'Fill' },
+            { id: 'picker', icon: '&#128065;', label: 'Pick' },
+            { id: 'undo',   icon: '&#8617;', label: 'Undo' },
+            { id: 'redo',   icon: '&#8618;', label: 'Redo' },
+            { id: 'mirror', icon: '&#8646;', label: 'Mirror' },
+            { id: 'clear',  icon: '&#10060;', label: 'Clear' }
+        ];
+
+        var toolbar = document.getElementById('toolbar');
+        var html = '';
+        for (var i = 0; i < tools.length; i++) {
+            var t = tools[i];
+            var cls = (t.id === currentTool) ? ' active' : '';
+            html += '<button class="tool-btn' + cls + '" data-tool="' + t.id + '">';
+            html += '<span class="icon">' + t.icon + '</span>';
+            html += '<span>' + t.label + '</span></button>';
+        }
+        toolbar.innerHTML = html;
+
+        var btns = toolbar.querySelectorAll('.tool-btn');
+        for (var b = 0; b < btns.length; b++) {
+            btns[b].addEventListener('click', function () {
+                var tool = this.getAttribute('data-tool');
+                handleToolClick(tool);
+            });
+        }
+    }
+
+    function handleToolClick(tool) {
+        if (tool === 'undo') { undo(); return; }
+        if (tool === 'redo') { redo(); return; }
+        if (tool === 'clear') { clearCanvas(); return; }
+        if (tool === 'mirror') { mirrorCanvas(); return; }
+        currentTool = tool;
+        updateToolbarActive();
+    }
+
+    function updateToolbarActive() {
+        var btns = document.querySelectorAll('.tool-btn');
+        for (var i = 0; i < btns.length; i++) {
+            var t = btns[i].getAttribute('data-tool');
+            btns[i].classList.toggle('active', t === currentTool);
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // Color palette
+    // ---------------------------------------------------------------
+
+    function buildPalette() {
+        var paletteEl = document.getElementById('palette');
+        var html = '';
+        for (var i = 0; i < PALETTE.length; i++) {
+            var color = PALETTE[i];
+            var cls = 'color-swatch';
+            if (color === null) cls += ' transparent';
+            if (color === currentColor || (color === null && currentColor === null)) cls += ' active';
+            var style = color ? 'background:' + color : '';
+            html += '<div class="' + cls + '" data-color="' + (color || '') + '" style="' + style + '"></div>';
+        }
+        paletteEl.innerHTML = html;
+
+        var swatches = paletteEl.querySelectorAll('.color-swatch');
+        for (var s = 0; s < swatches.length; s++) {
+            swatches[s].addEventListener('click', function () {
+                var c = this.getAttribute('data-color');
+                currentColor = c === '' ? null : c;
+                updatePaletteActive();
+                updateCurrentColorDisplay();
+            });
+        }
+
+        updateCurrentColorDisplay();
+
+        // Hex input
+        var hexInput = document.getElementById('color-hex');
+        hexInput.addEventListener('change', function () {
+            var val = this.value.trim();
+            if (/^#[0-9a-fA-F]{6}$/.test(val)) {
+                currentColor = val;
+                updatePaletteActive();
+                updateCurrentColorDisplay();
+            }
+        });
+    }
+
+    function updatePaletteActive() {
+        var swatches = document.querySelectorAll('.color-swatch');
+        for (var i = 0; i < swatches.length; i++) {
+            var c = swatches[i].getAttribute('data-color');
+            var match = (c === '' && currentColor === null) || c === currentColor;
+            swatches[i].classList.toggle('active', match);
+        }
+    }
+
+    function updateCurrentColorDisplay() {
+        var swatch = document.getElementById('current-color-swatch');
+        var hexInput = document.getElementById('color-hex');
+        if (currentColor) {
+            swatch.style.background = currentColor;
+            hexInput.value = currentColor;
+        } else {
+            swatch.style.background = 'repeating-conic-gradient(#666 0% 25%, #999 0% 50%) 50%/8px 8px';
+            hexInput.value = '';
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // Drawing (touch + mouse)
+    // ---------------------------------------------------------------
+
+    function getPixelCoords(e) {
+        var rect = canvas.getBoundingClientRect();
+        var clientX, clientY;
+        if (e.touches && e.touches.length > 0) {
+            clientX = e.touches[0].clientX;
+            clientY = e.touches[0].clientY;
+        } else {
+            clientX = e.clientX;
+            clientY = e.clientY;
+        }
+        var col = Math.floor((clientX - rect.left) / pixelSize);
+        var row = Math.floor((clientY - rect.top) / pixelSize);
+        return { col: col, row: row };
+    }
+
+    function isInBounds(col, row) {
+        return col >= 0 && col < currentSprite.w && row >= 0 && row < currentSprite.h;
+    }
+
+    function applyTool(col, row) {
+        if (!isInBounds(col, row)) return;
+
+        if (currentTool === 'pencil') {
+            pixels[row][col] = currentColor;
+        } else if (currentTool === 'eraser') {
+            pixels[row][col] = null;
+        } else if (currentTool === 'fill') {
+            floodFill(col, row, currentColor);
+        } else if (currentTool === 'picker') {
+            currentColor = pixels[row][col];
+            updatePaletteActive();
+            updateCurrentColorDisplay();
+            currentTool = 'pencil';
+            updateToolbarActive();
+        }
+
+        redrawCanvas();
+        updatePreviews();
+    }
+
+    function floodFill(startCol, startRow, fillColor) {
+        var target = pixels[startRow][startCol];
+        if (target === fillColor) return;
+
+        var stack = [[startCol, startRow]];
+        var w = currentSprite.w;
+        var h = currentSprite.h;
+
+        while (stack.length > 0) {
+            var pos = stack.pop();
+            var c = pos[0], r = pos[1];
+            if (c < 0 || c >= w || r < 0 || r >= h) continue;
+            if (pixels[r][c] !== target) continue;
+            pixels[r][c] = fillColor;
+            stack.push([c + 1, r], [c - 1, r], [c, r + 1], [c, r - 1]);
+        }
+    }
+
+    function startDraw(e) {
+        e.preventDefault();
+        pushUndo();
+        isDrawing = true;
+        var p = getPixelCoords(e);
+        applyTool(p.col, p.row);
+    }
+
+    function moveDraw(e) {
+        e.preventDefault();
+        if (!isDrawing) return;
+        if (currentTool === 'fill' || currentTool === 'picker') return;
+        var p = getPixelCoords(e);
+        applyTool(p.col, p.row);
+    }
+
+    function endDraw(e) {
+        e.preventDefault();
+        isDrawing = false;
+    }
+
+    // ---------------------------------------------------------------
+    // Undo / Redo
+    // ---------------------------------------------------------------
+
+    function pushUndo() {
+        undoStack.push(clonePixels(pixels));
+        if (undoStack.length > MAX_UNDO) undoStack.shift();
+        redoStack = [];
+    }
+
+    function undo() {
+        if (undoStack.length === 0) return;
+        redoStack.push(clonePixels(pixels));
+        pixels = undoStack.pop();
+        redrawCanvas();
+        updatePreviews();
+    }
+
+    function redo() {
+        if (redoStack.length === 0) return;
+        undoStack.push(clonePixels(pixels));
+        pixels = redoStack.pop();
+        redrawCanvas();
+        updatePreviews();
+    }
+
+    // ---------------------------------------------------------------
+    // Clear & Mirror
+    // ---------------------------------------------------------------
+
+    function clearCanvas() {
+        if (!confirm('Clear the canvas?')) return;
+        pushUndo();
+        pixels = makeEmptyPixels(currentSprite.w, currentSprite.h);
+        redrawCanvas();
+        updatePreviews();
+    }
+
+    function mirrorCanvas() {
+        pushUndo();
+        var w = currentSprite.w;
+        var h = currentSprite.h;
+        var mirrored = makeEmptyPixels(w, h);
+        for (var r = 0; r < h; r++) {
+            for (var c = 0; c < w; c++) {
+                mirrored[r][w - 1 - c] = pixels[r][c];
+            }
+        }
+        pixels = mirrored;
+        redrawCanvas();
+        updatePreviews();
+    }
+
+    // ---------------------------------------------------------------
+    // Export / Import
+    // ---------------------------------------------------------------
+
+    function getFilename(spriteName, frame, numFrames) {
+        if (numFrames > 1) {
+            return spriteName + '_' + frame + '.png';
+        }
+        return spriteName + '.png';
+    }
+
+    function updateFilenameDisplay() {
+        var el = document.getElementById('filename-display');
+        el.textContent = getFilename(currentSprite.name, currentFrame, currentSprite.frames);
+    }
+
+    function pixelsToCanvas(px, w, h) {
+        var c = document.createElement('canvas');
+        c.width = w;
+        c.height = h;
+        var tctx = c.getContext('2d');
+        for (var r = 0; r < h; r++) {
+            for (var col = 0; col < w; col++) {
+                if (px[r] && px[r][col]) {
+                    tctx.fillStyle = px[r][col];
+                    tctx.fillRect(col, r, 1, 1);
+                }
+            }
+        }
+        return c;
+    }
+
+    function downloadPNG() {
+        saveCurrentFrame();
+        var c = pixelsToCanvas(pixels, currentSprite.w, currentSprite.h);
+        var filename = getFilename(currentSprite.name, currentFrame, currentSprite.frames);
+        triggerDownload(c, filename);
+    }
+
+    function downloadAllFrames() {
+        saveCurrentFrame();
+        var key = currentSprite.name;
+        for (var f = 0; f < currentSprite.frames; f++) {
+            var px;
+            if (frameData[key] && frameData[key][f]) {
+                px = frameData[key][f];
+            } else {
+                px = loadFromProgrammatic(currentSprite.name, f);
+            }
+            var c = pixelsToCanvas(px, currentSprite.w, currentSprite.h);
+            var filename = getFilename(currentSprite.name, f, currentSprite.frames);
+            // Stagger downloads to avoid browser blocking
+            (function (canvas, fname, delay) {
+                setTimeout(function () { triggerDownload(canvas, fname); }, delay);
+            })(c, filename, f * 200);
+        }
+    }
+
+    function triggerDownload(canvasEl, filename) {
+        var link = document.createElement('a');
+        link.download = filename;
+        link.href = canvasEl.toDataURL('image/png');
+        link.click();
+    }
+
+    function importPNG() {
+        document.getElementById('file-input').click();
+    }
+
+    function handleFileImport(e) {
+        var file = e.target.files[0];
+        if (!file) return;
+        var reader = new FileReader();
+        reader.onload = function (ev) {
+            var img = new Image();
+            img.onload = function () {
+                pushUndo();
+                var w = currentSprite.w;
+                var h = currentSprite.h;
+                var tmpCanvas = document.createElement('canvas');
+                tmpCanvas.width = w;
+                tmpCanvas.height = h;
+                var tmpCtx = tmpCanvas.getContext('2d');
+                tmpCtx.drawImage(img, 0, 0, w, h);
+                var imgData = tmpCtx.getImageData(0, 0, w, h);
+                for (var r = 0; r < h; r++) {
+                    for (var c = 0; c < w; c++) {
+                        var i = (r * w + c) * 4;
+                        if (imgData.data[i + 3] < 128) {
+                            pixels[r][c] = null;
+                        } else {
+                            pixels[r][c] = '#' + hex(imgData.data[i]) + hex(imgData.data[i + 1]) + hex(imgData.data[i + 2]);
+                        }
+                    }
+                }
+                redrawCanvas();
+                updatePreviews();
+            };
+            img.src = ev.target.result;
+        };
+        reader.readAsDataURL(file);
+        e.target.value = '';
+    }
+
+    // ---------------------------------------------------------------
+    // Event binding
+    // ---------------------------------------------------------------
+
+    function bindEvents() {
+        // Touch events on canvas
+        canvas.addEventListener('touchstart', startDraw, { passive: false });
+        canvas.addEventListener('touchmove', moveDraw, { passive: false });
+        canvas.addEventListener('touchend', endDraw, { passive: false });
+        canvas.addEventListener('touchcancel', endDraw, { passive: false });
+
+        // Mouse events on canvas
+        canvas.addEventListener('mousedown', startDraw);
+        canvas.addEventListener('mousemove', moveDraw);
+        canvas.addEventListener('mouseup', endDraw);
+        canvas.addEventListener('mouseleave', endDraw);
+
+        // Grid toggle
+        document.getElementById('grid-toggle').addEventListener('change', function () {
+            showGrid = this.checked;
+            redrawCanvas();
+        });
+
+        // Export buttons
+        document.getElementById('btn-download').addEventListener('click', downloadPNG);
+        document.getElementById('btn-download-all').addEventListener('click', downloadAllFrames);
+        document.getElementById('btn-import').addEventListener('click', importPNG);
+        document.getElementById('file-input').addEventListener('change', handleFileImport);
+
+        // Resize handler
+        window.addEventListener('resize', function () {
+            resizeCanvas();
+            redrawCanvas();
+        });
+    }
+
+    // ---------------------------------------------------------------
+    // Start
+    // ---------------------------------------------------------------
+
+    window.addEventListener('load', init);
+})();

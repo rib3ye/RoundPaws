@@ -30,7 +30,7 @@ Game.Renderer = (function () {
     }
 
     function clear() {
-        ctx.fillStyle = '#0a1a3c'; // dark navy background
+        ctx.fillStyle = '#87CEEB'; // daytime sky blue background
         ctx.fillRect(0, 0, canvasW, canvasH);
     }
 

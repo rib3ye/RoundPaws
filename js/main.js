@@ -168,6 +168,12 @@ window.Game = window.Game || {};
         if (Game.Input.wasPressed('mute')) {
             Game.Music.toggleMute();
         }
+        if (Game.Input.wasPressed('volUp')) {
+            Game.Music.setVolume(Math.min(1, Game.Music.getVolume() + 0.05));
+        }
+        if (Game.Input.wasPressed('volDown')) {
+            Game.Music.setVolume(Math.max(0, Game.Music.getVolume() - 0.05));
+        }
         if (Game.Input.wasPressed('reload')) {
             Game.Sprites.clearCache();
             Game.Sprites.loadImages(function () {});
