@@ -243,10 +243,11 @@ Game.Music = (function () {
     // ---------------------------------------------------------------
 
     var _n = {
-        E2:82.4,  Fs2:92.5,  G2:98,    A2:110,   B2:123.5,
-        C3:130.8, D3:146.8,  E3:164.8, Fs3:185,  G3:196,   A3:220,   B3:246.9,
-        C4:261.6, D4:293.7,  Ds4:311.1,E4:329.6, Fs4:370,  G4:392,   A4:440,   B4:493.9,
-        C5:523.3, D5:587.3,  E5:659.3, Fs5:740,  G5:784
+        E2:82.4,  F2:87.3,   Fs2:92.5,  G2:98,    Ab2:103.8, A2:110,   Bb2:116.5, B2:123.5,
+        C3:130.8, Cs3:138.6, D3:146.8,  Ds3:155.6,E3:164.8, F3:174.6, Fs3:185,  G3:196,   Ab3:207.7, A3:220,   Bb3:233.1, B3:246.9,
+        C4:261.6, Cs4:277.2, D4:293.7,  Ds4:311.1,E4:329.6, F4:349.2, Fs4:370,  G4:392,   Ab4:415.3, A4:440,   Bb4:466.2, B4:493.9,
+        C5:523.3, Cs5:554.4, D5:587.3,  Ds5:622.3,E5:659.3, F5:698.5, Fs5:740,  G5:784,   Ab5:830.6, A5:880,   Bb5:932.3, B5:987.8,
+        C6:1046.5
     };
 
     /**
@@ -456,15 +457,96 @@ Game.Music = (function () {
     ];
 
     // ---------------------------------------------------------------
-    // Title music data — 64 steps (4 bars), atmospheric E minor
+    // Title music data — 256 steps (16 bars), epic Mega Man style
+    //
+    // Structure:
+    //   Intro  (bars 1-4):   Building tension — drums + bass, no melody
+    //   Theme  (bars 5-8):   Heroic melody enters with full arps
+    //   Bridge (bars 9-12):  Key shift, dramatic ascending line
+    //   Climax (bars 13-16): Full power — melody + harmony + driving beat
     // ---------------------------------------------------------------
 
     var titleMelody = buildMap([
-        [0,_n.E5,6],[8,_n.D5,4],[12,_n.B4,4],
-        [16,_n.C5,6],[24,_n.A4,4],[28,_n.G4,4],
-        [32,_n.A4,4],[36,_n.B4,4],[40,_n.C5,4],[44,_n.D5,4],
-        [48,_n.E5,8],[56,_n.D5,4],[60,_n.B4,4]
+        // === Intro (0-63): No melody, just tension-building ===
+
+        // === Theme (64-127): Heroic melody in E minor ===
+        [64,_n.E5,4],[68,_n.E5,2],[70,_n.Fs5,2],
+        [72,_n.G5,4],[76,_n.Fs5,2],[78,_n.E5,2],
+        [80,_n.D5,6],[86,_n.B4,2],
+        [88,_n.E5,8],
+
+        [96,_n.E5,4],[100,_n.E5,2],[102,_n.Fs5,2],
+        [104,_n.G5,4],[108,_n.A5,2],[110,_n.G5,2],
+        [112,_n.Fs5,4],[116,_n.E5,2],[118,_n.D5,2],
+        [120,_n.E5,8],
+
+        // === Bridge (128-191): Dramatic ascending, shift to C ===
+        [128,_n.C5,4],[132,_n.D5,2],[134,_n.E5,2],
+        [136,_n.F5,4],[140,_n.E5,2],[142,_n.D5,2],
+        [144,_n.E5,4],[148,_n.F5,2],[150,_n.G5,2],
+        [152,_n.A5,8],
+
+        [160,_n.G5,4],[164,_n.A5,2],[166,_n.G5,2],
+        [168,_n.F5,4],[172,_n.E5,2],[174,_n.D5,2],
+        [176,_n.E5,2],[178,_n.G5,2],[180,_n.B5,4],
+        [184,_n.A5,4],[188,_n.G5,4],
+
+        // === Climax (192-255): Full power, triumphant ===
+        [192,_n.E5,2],[194,_n.G5,2],[196,_n.B5,4],
+        [200,_n.A5,2],[202,_n.G5,2],[204,_n.Fs5,2],[206,_n.E5,2],
+        [208,_n.G5,4],[212,_n.Fs5,2],[214,_n.E5,2],
+        [216,_n.D5,4],[220,_n.E5,4],
+
+        [224,_n.E5,2],[226,_n.G5,2],[228,_n.B5,4],
+        [232,_n.B5,2],[234,_n.A5,2],[236,_n.G5,2],[238,_n.A5,2],
+        [240,_n.B5,8],
+        [248,_n.E5,4],[252,_n.E5,4]
     ]);
+
+    // Harmony line — plays during climax section only
+    var titleHarmony = buildMap([
+        [192,_n.B4,2],[194,_n.D5,2],[196,_n.G5,4],
+        [200,_n.E5,2],[202,_n.D5,2],[204,_n.D5,2],[206,_n.B4,2],
+        [208,_n.D5,4],[212,_n.D5,2],[214,_n.B4,2],
+        [216,_n.B4,4],[220,_n.B4,4],
+
+        [224,_n.B4,2],[226,_n.D5,2],[228,_n.G5,4],
+        [232,_n.G5,2],[234,_n.Fs5,2],[236,_n.E5,2],[238,_n.Fs5,2],
+        [240,_n.G5,8],
+        [248,_n.B4,4],[252,_n.B4,4]
+    ]);
+
+    // Arpeggio chords: [startStep, endStep, [notes...]]
+    var titleArpChords = [
+        // Intro: building arpeggios
+        [0,  16,  [_n.E3, _n.B3, _n.E4, _n.G4]],
+        [16, 32,  [_n.C3, _n.E3, _n.G3, _n.C4]],
+        [32, 48,  [_n.D3, _n.Fs3, _n.A3, _n.D4]],
+        [48, 64,  [_n.B2, _n.Ds3, _n.Fs3, _n.B3]],
+        // Theme
+        [64, 96,  [_n.E3, _n.B3, _n.E4, _n.G4]],
+        [96, 128, [_n.C3, _n.G3, _n.C4, _n.E4]],
+        // Bridge
+        [128,160, [_n.A3, _n.C4, _n.E4, _n.A4]],
+        [160,192, [_n.E3, _n.G3, _n.B3, _n.E4]],
+        // Climax
+        [192,224, [_n.E3, _n.B3, _n.E4, _n.G4]],
+        [224,256, [_n.E3, _n.G3, _n.B3, _n.E4]]
+    ];
+
+    // Bass roots: [startStep, endStep, root, alternate]
+    var titleBassRoots = [
+        [0,  16,  _n.E2, _n.B2],
+        [16, 32,  _n.C3, _n.G2],
+        [32, 48,  _n.D3, _n.A2],
+        [48, 64,  _n.B2, _n.Fs2],
+        [64, 96,  _n.E2, _n.B2],
+        [96, 128, _n.C3, _n.G2],
+        [128,160, _n.A2, _n.E2],
+        [160,192, _n.E2, _n.B2],
+        [192,224, _n.E2, _n.B2],
+        [224,256, _n.E2, _n.G2]
+    ];
 
     // ---------------------------------------------------------------
     // Ending music data — 64 steps (4 bars), triumphant C major
@@ -482,7 +564,7 @@ Game.Music = (function () {
     ]);
 
     // Steps per pattern (for looping)
-    var patternLengths = { gameplay: 512, title: 64, ending: 64 };
+    var patternLengths = { gameplay: 512, title: 256, ending: 64 };
 
     // ---------------------------------------------------------------
     // Pattern playback functions
@@ -554,37 +636,89 @@ Game.Music = (function () {
             }
         },
 
-        /** Title pattern — gentle kick/hihat, melody, sustained pad chords, bass. */
+        /**
+         * Title pattern — epic Mega Man 2 style.
+         * 256 steps, 4 sections building from tension to full power.
+         */
         title: function (s, time) {
             var st = stepTime;
             var ds = s % 16;
+            var section = Math.floor(s / 64); // 0=Intro, 1=Theme, 2=Bridge, 3=Climax
 
-            // Gentle drums
-            if (ds === 0) kick(time);
-            if (ds === 8) hihat(time, true);
+            // --- Drums (build intensity across sections) ---
+            if (section === 0) {
+                // Intro: starts sparse, builds
+                if (s < 32) {
+                    // First 2 bars: just kick on 1
+                    if (ds === 0) kick(time);
+                    if (ds === 8) hihat(time, false);
+                } else {
+                    // Bars 3-4: add snare, more hats
+                    if (ds === 0 || ds === 8) kick(time);
+                    if (ds === 4 || ds === 12) snare(time);
+                    if (ds % 2 === 0) hihat(time, ds === 14);
+                }
+            } else if (section === 1) {
+                // Theme: full driving beat
+                if (ds === 0 || ds === 8) kick(time);
+                if (ds === 4 || ds === 12) snare(time);
+                if (ds % 2 === 0) hihat(time, ds === 6 || ds === 14);
+            } else if (section === 2) {
+                // Bridge: syncopated, dramatic
+                if (ds === 0 || ds === 6 || ds === 10) kick(time);
+                if (ds === 4 || ds === 12) snare(time);
+                if (ds % 2 === 0) hihat(time, ds === 14);
+            } else {
+                // Climax: double-time kicks, maximum energy
+                if (ds === 0 || ds === 4 || ds === 8 || ds === 12) kick(time);
+                if (ds === 2 || ds === 6 || ds === 10 || ds === 14) snare(time);
+                hihat(time, ds % 4 === 2);
+            }
 
-            // Melody
+            // --- Melody (pulse lead) ---
             if (titleMelody[s]) {
                 pulse(time, titleMelody[s][0], st * titleMelody[s][1] * 0.9);
             }
 
-            // Sustained pad chords (Em for first half, Am for second half)
-            if (s === 0) {
-                var dur = st * 32;
-                pad(time, _n.E4, dur);
-                pad(time, _n.G4, dur);
-                pad(time, _n.B4, dur);
-            }
-            if (s === 32) {
-                var dur2 = st * 32;
-                pad(time, _n.A3, dur2);
-                pad(time, _n.C4, dur2);
-                pad(time, _n.E4, dur2);
+            // --- Harmony (pulse quiet, climax only) ---
+            if (titleHarmony[s]) {
+                pulseQuiet(time, titleHarmony[s][0], st * titleHarmony[s][1] * 0.85);
             }
 
-            // Bass
-            if (s % 4 === 0) {
-                tri(time, (s < 32) ? _n.E2 : _n.A2, st * 4 * 0.9);
+            // --- Arpeggios (faster as sections progress) ---
+            var arpInt = (section === 0) ? 2 : (section === 3) ? 1 : 2;
+            if (s % arpInt === 0) {
+                for (var i = 0; i < titleArpChords.length; i++) {
+                    var ch = titleArpChords[i];
+                    if (s >= ch[0] && s < ch[1]) {
+                        var idx = ((s - ch[0]) / arpInt) % ch[2].length;
+                        pulseQuiet(time, ch[2][idx], st * arpInt * 0.85);
+                        break;
+                    }
+                }
+            }
+
+            // --- Bass (triangle, driving 8th notes) ---
+            var bassInt = (section === 0 && s < 32) ? 4 : 2;
+            if (s % bassInt === 0) {
+                for (var j = 0; j < titleBassRoots.length; j++) {
+                    var b = titleBassRoots[j];
+                    if (s >= b[0] && s < b[1]) {
+                        tri(time, (s % (bassInt * 2) === 0) ? b[2] : b[3], st * bassInt * 0.9);
+                        break;
+                    }
+                }
+            }
+
+            // --- Sub-bass (detuned saw, theme and beyond) ---
+            if (section >= 1 && s % 8 === 0) {
+                for (var k = 0; k < titleBassRoots.length; k++) {
+                    var br = titleBassRoots[k];
+                    if (s >= br[0] && s < br[1]) {
+                        bass(time, br[2], st * 8 * 0.9);
+                        break;
+                    }
+                }
             }
         },
 
