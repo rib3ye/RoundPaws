@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html>
+<head><title>Round Paws Tests</title></head>
+<body>
+<pre id="output"></pre>
+<script src="js/input.js"></script>
+<script src="js/sprites.js"></script>
+<script src="js/level.js"></script>
+<script>
+var passed = 0, failed = 0;
+
+function assert(condition, name) {
+    if (condition) {
+        passed++;
+        log('PASS: ' + name);
+    } else {
+        failed++;
+        log('FAIL: ' + name);
+    }
+}
+
+function log(msg) {
+    document.getElementById('output').textContent += msg + '\n';
+}
+
+// Test 1: Parse a simple level
+(function testParsesGrid() {
+    var txt = '...\n=.=\n~~~';
+    var level = Game.Level.parse(txt);
+    assert(level.grid.length === 3, 'parse: 3 rows');
+    assert(level.grid[0].length === 3, 'parse: 3 cols');
+    assert(level.grid[0][0] === '.', 'parse: air at 0,0');
+    assert(level.grid[1][0] === '=', 'parse: plank at 1,0');
+    assert(level.grid[2][1] === '~', 'parse: water at 2,1');
+    assert(level.width === 3, 'parse: width 3');
+    assert(level.height === 3, 'parse: height 3');
+})();
+
+// Test 2: Extracts player start
+(function testPlayerStart() {
+    var txt = '...\n.P.\n===';
+    var level = Game.Level.parse(txt);
+    assert(level.playerStart.x === 1, 'player start x=1');
+    assert(level.playerStart.y === 1, 'player start y=1');
+    assert(level.grid[1][1] === '.', 'player tile replaced with air');
+})();
+
+// Test 3: Extracts enemies
+(function testEnemies() {
+    var txt = '...\n.C.\n===';
+    var level = Game.Level.parse(txt);
+    assert(level.enemies.length === 1, 'one enemy');
+    assert(level.enemies[0].x === 1, 'enemy at x=1');
+    assert(level.enemies[0].y === 1, 'enemy at y=1');
+    assert(level.grid[1][1] === '.', 'enemy tile replaced with air');
+})();
+
+// Test 4: Extracts carrot pickups
+(function testCarrots() {
+    var txt = 'K.K\n...\n===';
+    var level = Game.Level.parse(txt);
+    assert(level.carrots.length === 2, 'two carrots');
+    assert(level.grid[0][0] === '.', 'carrot tile replaced with air');
+})();
+
+// Test 5: Extracts flag
+(function testFlag() {
+    var txt = '..F\n...\n===';
+    var level = Game.Level.parse(txt);
+    assert(level.flag.x === 2, 'flag at x=2');
+    assert(level.flag.y === 0, 'flag at y=0');
+})();
+
+// Test 6: Strips comment lines
+(function testComments() {
+    var txt = '# This is a comment\n...\n===';
+    var level = Game.Level.parse(txt);
+    assert(level.grid.length === 2, 'comments stripped, 2 rows');
+})();
+
+// Test 7: isSolid checks
+(function testIsSolid() {
+    var txt = '.=\n#B';
+    var level = Game.Level.parse(txt);
+    assert(!Game.Level.isSolid(level, 0, 0), 'air not solid');
+    assert(Game.Level.isSolid(level, 1, 0), 'plank is solid');
+    assert(Game.Level.isSolid(level, 0, 1), 'hull is solid');
+    assert(Game.Level.isSolid(level, 1, 1), 'barrel is solid');
+    assert(!Game.Level.isSolid(level, 5, 5), 'out of bounds not solid');
+})();
+
+// Test 8: isWater checks
+(function testIsWater() {
+    var txt = '.~';
+    var level = Game.Level.parse(txt);
+    assert(!Game.Level.isWater(level, 0, 0), 'air not water');
+    assert(Game.Level.isWater(level, 1, 0), 'water is water');
+})();
+
+// Test 9: isThinPlatform
+(function testThinPlatform() {
+    var txt = '.-';
+    var level = Game.Level.parse(txt);
+    assert(!Game.Level.isThinPlatform(level, 0, 0), 'air not thin platform');
+    assert(Game.Level.isThinPlatform(level, 1, 0), 'dash is thin platform');
+})();
+
+// Test 10: isRope
+(function testRope() {
+    var txt = '.R';
+    var level = Game.Level.parse(txt);
+    assert(Game.Level.isRope(level, 1, 0), 'R is rope');
+    assert(!Game.Level.isRope(level, 0, 0), 'air not rope');
+})();
+
+log('\n' + passed + ' passed, ' + failed + ' failed');
+</script>
+</body>
+</html>
