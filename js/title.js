@@ -36,16 +36,18 @@ Game.Title = (function () {
             }
         }
 
-        R.drawRect(370, 20, 20, 20, '#ffffaa');
-        R.drawRect(372, 18, 16, 2, '#ffffaa');
-        R.drawRect(368, 22, 2, 16, '#ffffaa');
+        var ctx = R.getCtx();
+        ctx.fillStyle = '#ffffaa';
+        ctx.beginPath();
+        ctx.arc(380, 30, 14, 0, Math.PI * 2);
+        ctx.fill();
 
-        R.drawTextCentered('THE ADVENTURE OF', 60, '#ffaa00', 10);
-        R.drawTextCentered('ROUND PAWS', 83, '#aa0000', 24);
-        R.drawTextCentered('ROUND PAWS', 82, '#ff6600', 24);
-        R.drawTextCentered('ROUND PAWS', 80, '#ffffff', 24);
+        R.drawSpriteScaled('happy_cat', (448 - 112) / 2, (224 - 112) / 2 + 20, 3.5, 0);
 
-        R.drawSpriteAbsolute('happy_cat', 208, 96, 0);
+        R.drawTextCentered('THE ADVENTURE OF', 42, '#ffaa00', 17);
+        R.drawTextCentered('ROUND PAWS', 85, '#aa0000', 41);
+        R.drawTextCentered('ROUND PAWS', 84, '#ff6600', 41);
+        R.drawTextCentered('ROUND PAWS', 82, '#ffffff', 41);
 
         R.drawRect(0, 190, 448, 4, '#BF6530');
         R.drawRect(0, 194, 448, 30, '#8B4513');

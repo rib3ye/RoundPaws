@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Export Tiles</title>
+    <style>
+        body { font-family: monospace; background: #222; color: #eee; padding: 20px; }
+        .tile { display: inline-block; margin: 10px; text-align: center; }
+        .tile canvas { display: block; border: 1px solid #555; image-rendering: pixelated; }
+        .tile a { color: #4af; display: block; margin-top: 4px; font-size: 12px; }
+        h2 { color: #ffaa00; }
+        button { font-size: 16px; padding: 10px 20px; margin: 10px 0; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h2>Tile Exporter - Round Paws</h2>
+    <p>Click "Export All" to download all sprites as PNGs into your tiles/ folder.</p>
+    <p>Naming: single-frame sprites = <code>name.png</code>, animated = <code>name_0.png, name_1.png, ...</code></p>
+    <button id="exportAll">Export All</button>
+    <div id="tiles"></div>
+
+    <script src="js/sprites.js"></script>
+    <script>
+        var container = document.getElementById('tiles');
+        var info = Game.Sprites.spriteInfo;
+
+        var entries = [];
+
+        for (var name in info) {
+            var frames = info[name];
+            for (var f = 0; f < frames; f++) {
+                var sprite = Game.Sprites.get(name, f);
+                var filename = frames > 1
+                    ? name + '_' + f + '.png'
+                    : name + '.png';
+
+                var div = document.createElement('div');
+                div.className = 'tile';
+
+                // Show scaled preview
+                var preview = document.createElement('canvas');
+                preview.width = sprite.width * 4;
+                preview.height = sprite.height * 4;
+                var pctx = preview.getContext('2d');
+                pctx.imageSmoothingEnabled = false;
+                pctx.drawImage(sprite, 0, 0, preview.width, preview.height);
+                div.appendChild(preview);
+
+                var link = document.createElement('a');
+                link.textContent = filename;
+                link.href = sprite.toDataURL('image/png');
+                link.download = filename;
+                div.appendChild(link);
+
+                container.appendChild(div);
+                entries.push({ filename: filename, canvas: sprite });
+            }
+        }
+
+        document.getElementById('exportAll').addEventListener('click', function () {
+            entries.forEach(function (e, i) {
+                setTimeout(function () {
+                    var a = document.createElement('a');
+                    a.href = e.canvas.toDataURL('image/png');
+                    a.download = e.filename;
+                    a.click();
+                }, i * 100);
+            });
+        });
+    </script>
+</body>
+</html>

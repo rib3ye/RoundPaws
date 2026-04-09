@@ -26,6 +26,10 @@ Game.Player = (function () {
     var animFrame = 0;
     var animTimer = 0;
     var startX, startY;
+    var sliding = false;
+    var slideTimer = 0;
+    var SLIDE_SPEED = 3.0;
+    var SLIDE_DURATION = 20;
 
     function init(level) {
         startX = level.playerStart.x * TILE + 2;
@@ -43,6 +47,8 @@ Game.Player = (function () {
         jumpHeld = 0;
         alive = true;
         throwCooldown = 0;
+        sliding = false;
+        slideTimer = 0;
     }
 
     function update(level) {
@@ -50,8 +56,10 @@ Game.Player = (function () {
 
         var Input = Game.Input;
 
+        var isMoving = Game.Input.isDown('left') || Game.Input.isDown('right');
+        var animSpeed = isMoving ? 8 : 24;
         animTimer++;
-        if (animTimer > 8) {
+        if (animTimer > animSpeed) {
             animTimer = 0;
             animFrame = (animFrame + 1) % 4;
         }
@@ -67,13 +75,25 @@ Game.Player = (function () {
             vx = 0;
             if (Input.isDown('up')) vy = -ROPE_CLIMB_SPEED;
             if (Input.isDown('down')) vy = ROPE_CLIMB_SPEED;
-            if (Input.wasPressed('up') && !Input.isDown('down')) {
-                if (Input.isDown('left') || Input.isDown('right')) {
-                    onRope = false;
-                    vy = JUMP_FORCE;
-                    jumpHeld = 0;
-                }
+            // Jump off rope when pressing left or right while on rope
+            if (Input.wasPressed('up') && (Input.isDown('left') || Input.isDown('right'))) {
+                onRope = false;
+                vy = JUMP_FORCE;
+                jumpHeld = JUMP_HOLD_FRAMES;
+                facing = Input.isDown('left') ? -1 : 1;
+                vx = facing * MOVE_SPEED;
+                Game.Music.sfx('jump');
             }
+        } else if (sliding) {
+            // Slide movement — override normal controls
+            slideTimer--;
+            vx = facing * SLIDE_SPEED * (slideTimer / SLIDE_DURATION);
+            if (slideTimer <= 0) {
+                sliding = false;
+                vx = 0;
+            }
+            vy += GRAVITY;
+            if (vy > MAX_FALL) vy = MAX_FALL;
         } else {
             var accel = onGround ? 1 : AIR_CONTROL;
             if (Input.isDown('left')) {
@@ -88,7 +108,12 @@ Game.Player = (function () {
             if (Math.abs(vx) > MOVE_SPEED) vx = MOVE_SPEED * Math.sign(vx);
             if (Math.abs(vx) < 0.05) vx = 0;
 
-            if (Input.wasPressed('up') && onGround) {
+            if (Input.wasPressed('up') && onGround && Input.isDown('down')) {
+                sliding = true;
+                slideTimer = SLIDE_DURATION;
+                vx = facing * SLIDE_SPEED;
+                Game.Music.sfx('jump');
+            } else if (Input.wasPressed('up') && onGround) {
                 vy = JUMP_FORCE;
                 onGround = false;
                 jumpHeld = JUMP_HOLD_FRAMES;
@@ -112,6 +137,7 @@ Game.Player = (function () {
         }
 
         x += vx;
+        if (x < 0) { x = 0; vx = 0; }
         resolveCollisionX(level);
 
         y += vy;
@@ -213,9 +239,17 @@ Game.Player = (function () {
     }
 
     function draw() {
-        var spriteName = facing === 1 ? 'cat' : 'cat_left';
-        Game.Renderer.drawSprite(spriteName, x, y, animFrame);
+        var spriteName;
+        if (sliding) {
+            spriteName = facing === 1 ? 'cat_slide' : 'cat_slide_left';
+            Game.Renderer.drawSprite(spriteName, x, y + 6, 0);
+        } else {
+            spriteName = facing === 1 ? 'cat' : 'cat_left';
+            Game.Renderer.drawSprite(spriteName, x, y, animFrame);
+        }
     }
+
+    function isSliding() { return sliding; }
 
     function drawHUD() {
         Game.Renderer.drawSpriteAbsolute('carrot', 4, 2, 0);
@@ -223,6 +257,7 @@ Game.Player = (function () {
     }
 
     function getX() { return x; }
+    function setX(val) { x = val; }
     function getY() { return y; }
     function getWidth() { return width; }
     function getHeight() { return height; }
@@ -233,7 +268,7 @@ Game.Player = (function () {
     return {
         init: init, update: update, draw: draw, drawHUD: drawHUD,
         respawn: respawn, collectCarrot: collectCarrot,
-        getX: getX, getY: getY, getWidth: getWidth, getHeight: getHeight,
-        isAlive: isAlive, getCarrots: getCarrots, setCarrots: setCarrots
+        getX: getX, setX: setX, getY: getY, getWidth: getWidth, getHeight: getHeight,
+        isAlive: isAlive, isSliding: isSliding, getCarrots: getCarrots, setCarrots: setCarrots
     };
 })();

@@ -2,6 +2,48 @@ window.Game = window.Game || {};
 
 Game.Sprites = (function () {
     var cache = {};
+    var imageOverrides = {};
+    var TILE_PATH = 'tiles/';
+
+    // Sprite metadata: name -> { frames }
+    var spriteInfo = {
+        wood_plank: 1, hull_wall: 1, water: 4, rope: 1, barrel: 1, mast: 1,
+        thin_platform: 1, cat: 4, cat_left: 4, cat_slide: 1, cat_slide_left: 1,
+        happy_cat: 1, sleeping_cat: 3,
+        crab: 4, carrot: 1, carrot_projectile: 1, carrot_projectile_left: 1, flag: 2
+    };
+
+    function loadImages(callback) {
+        var toLoad = 0;
+        var loaded = 0;
+        var bust = '?t=' + Date.now();
+
+        function done() {
+            loaded++;
+            if (loaded === toLoad && callback) callback();
+        }
+
+        for (var name in spriteInfo) {
+            var frames = spriteInfo[name];
+            for (var f = 0; f < frames; f++) {
+                toLoad++;
+                (function (spriteName, frame, numFrames) {
+                    var filename = numFrames > 1
+                        ? TILE_PATH + spriteName + '_' + frame + '.png'
+                        : TILE_PATH + spriteName + '.png';
+                    var img = new Image();
+                    img.onload = function () {
+                        imageOverrides[spriteName + '_' + frame] = img;
+                        done();
+                    };
+                    img.onerror = done;
+                    img.src = filename + bust;
+                })(name, f, frames);
+            }
+        }
+
+        if (toLoad === 0 && callback) callback();
+    }
 
     function createCanvas(w, h) {
         var c = document.createElement('canvas');
@@ -153,6 +195,30 @@ Game.Sprites = (function () {
         rect(ctx, 10, 10, 2, 2, '#c33');
     }
 
+    // Cat slide — 16x10, low profile
+    function drawCatSlide(ctx) {
+        // Flat body
+        rect(ctx, 2, 2, 12, 6, '#222');
+        // Eyes
+        rect(ctx, 9, 2, 2, 2, '#4f4');
+        rect(ctx, 12, 2, 2, 2, '#4f4');
+        px(ctx, 10, 2, '#0a0');
+        px(ctx, 13, 2, '#0a0');
+        // Ears
+        px(ctx, 12, 0, '#222');
+        px(ctx, 13, 1, '#222');
+        px(ctx, 14, 0, '#222');
+        px(ctx, 14, 1, '#222');
+        // Rear leg trailing
+        rect(ctx, 0, 6, 3, 2, '#222');
+        // Front leg extended
+        rect(ctx, 12, 8, 4, 2, '#222');
+        // Tail up
+        px(ctx, 0, 1, '#222');
+        px(ctx, 1, 0, '#222');
+        px(ctx, 1, 1, '#222');
+    }
+
     // Carrot pickup — 8x14
     function drawCarrot(ctx, bobOffset) {
         var y = bobOffset || 0;
@@ -239,6 +305,7 @@ Game.Sprites = (function () {
 
     function get(name, frame) {
         var key = name + '_' + (frame || 0);
+        if (imageOverrides[key]) return imageOverrides[key];
         if (cache[key]) return cache[key];
 
         var c, ctx;
@@ -248,6 +315,11 @@ Game.Sprites = (function () {
             case 'cat_left':
                 c = createCanvas(16, 16); ctx = c.getContext('2d');
                 ctx.save(); ctx.scale(-1, 1); ctx.translate(-16, 0); drawCat(ctx, frame); ctx.restore(); break;
+            case 'cat_slide':
+                c = createCanvas(16, 10); ctx = c.getContext('2d'); drawCatSlide(ctx); break;
+            case 'cat_slide_left':
+                c = createCanvas(16, 10); ctx = c.getContext('2d');
+                ctx.save(); ctx.scale(-1, 1); ctx.translate(-16, 0); drawCatSlide(ctx); ctx.restore(); break;
             case 'happy_cat':
                 c = createCanvas(32, 32); ctx = c.getContext('2d'); drawHappyCat(ctx); break;
             case 'sleeping_cat':
@@ -287,5 +359,5 @@ Game.Sprites = (function () {
 
     function clearCache() { cache = {}; }
 
-    return { get: get, clearCache: clearCache };
+    return { get: get, clearCache: clearCache, loadImages: loadImages, spriteInfo: spriteInfo };
 })();

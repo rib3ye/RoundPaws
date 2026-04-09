@@ -72,6 +72,13 @@ Game.Renderer = (function () {
         ctx.drawImage(sprite, Math.round(x), Math.round(y));
     }
 
+    function drawSpriteScaled(spriteName, x, y, scale, frame) {
+        var sprite = Game.Sprites.get(spriteName, frame);
+        var w = sprite.width * scale;
+        var h = sprite.height * scale;
+        ctx.drawImage(sprite, Math.round(x), Math.round(y), Math.round(w), Math.round(h));
+    }
+
     function drawText(text, x, y, color, size) {
         ctx.fillStyle = color || '#fff';
         ctx.font = (size || 8) + 'px monospace';
@@ -103,6 +110,7 @@ Game.Renderer = (function () {
         drawLevel: drawLevel,
         drawSprite: drawSprite,
         drawSpriteAbsolute: drawSpriteAbsolute,
+        drawSpriteScaled: drawSpriteScaled,
         drawText: drawText,
         drawTextCentered: drawTextCentered,
         drawRect: drawRect,

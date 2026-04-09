@@ -10,6 +10,7 @@ window.Game = window.Game || {};
     var levelNames = ['The Poop Deck', 'Below Deck', "The Crow's Nest"];
     var levelFiles = ['levels/level1.txt', 'levels/level2.txt', 'levels/level3.txt'];
     var carrotPickups = [];
+    var barrels = [];
     var flagAnimFrame = 0;
     var transitionTimer = 0;
     var transitionFlash = 0;
@@ -29,6 +30,7 @@ window.Game = window.Game || {};
             Game.Projectile.clear();
             Game.Renderer.resetCamera();
             initCarrotPickups(level);
+            initBarrels(level);
             state = 'playing';
             Game.Music.play('gameplay');
         });
@@ -46,8 +48,80 @@ window.Game = window.Game || {};
         }
     }
 
+    function initBarrels(level) {
+        barrels = [];
+        for (var i = 0; i < level.barrels.length; i++) {
+            var b = level.barrels[i];
+            barrels.push({
+                x: b.x * TILE,
+                y: b.y * TILE,
+                vx: 0
+            });
+        }
+    }
+
+    function updateBarrels() {
+        var BARREL_FRICTION = 0.85;
+        var PUSH_SPEED = 1.8;
+
+        var px = Game.Player.getX();
+        var py = Game.Player.getY();
+        var pw = Game.Player.getWidth();
+        var ph = Game.Player.getHeight();
+
+        for (var i = 0; i < barrels.length; i++) {
+            var b = barrels[i];
+
+            // Player pushes barrel
+            if (px + pw > b.x && px < b.x + TILE &&
+                py + ph > b.y && py < b.y + TILE) {
+                var playerCenterX = px + pw / 2;
+                var barrelCenterX = b.x + TILE / 2;
+                if (playerCenterX < barrelCenterX) {
+                    b.vx = PUSH_SPEED;
+                    // Push player back
+                    Game.Player.setX(b.x - pw);
+                } else {
+                    b.vx = -PUSH_SPEED;
+                    Game.Player.setX(b.x + TILE);
+                }
+            }
+
+            // Apply velocity
+            b.x += b.vx;
+            b.vx *= BARREL_FRICTION;
+            if (Math.abs(b.vx) < 0.05) b.vx = 0;
+
+            // Wall collision
+            var bCol = Math.floor((b.vx > 0 ? b.x + TILE - 1 : b.x) / TILE);
+            var bRow = Math.floor(b.y / TILE);
+            if (Game.Level.isSolid(currentLevel, bCol, bRow)) {
+                if (b.vx > 0) {
+                    b.x = bCol * TILE - TILE;
+                } else if (b.vx < 0) {
+                    b.x = (bCol + 1) * TILE;
+                }
+                b.vx = 0;
+            }
+
+            // Kill crabs when barrel is moving
+            if (Math.abs(b.vx) > 0.3) {
+                Game.Enemies.hitTest(b.x, b.y, TILE, TILE);
+            }
+        }
+    }
+
     function update() {
         Game.Input.update();
+
+        if (Game.Input.wasPressed('mute')) {
+            Game.Music.toggleMute();
+        }
+
+        if (Game.Input.wasPressed('reload')) {
+            Game.Sprites.clearCache();
+            Game.Sprites.loadImages(function () {});
+        }
 
         animTimer++;
         if (animTimer > 12) {
@@ -60,7 +134,6 @@ window.Game = window.Game || {};
             case 'title':
                 var result = Game.Title.update();
                 if (result === 'start_game') {
-                    Game.Music.init();
                     startGame();
                 }
                 break;
@@ -71,6 +144,7 @@ window.Game = window.Game || {};
                 var playerResult = Game.Player.update(currentLevel);
                 Game.Enemies.update(currentLevel);
                 Game.Projectile.update(currentLevel);
+                updateBarrels();
 
                 var px = Game.Player.getX();
                 var py = Game.Player.getY();
@@ -92,6 +166,7 @@ window.Game = window.Game || {};
                     Game.Player.respawn();
                     Game.Projectile.clear();
                     initCarrotPickups(currentLevel);
+                    initBarrels(currentLevel);
                     Game.Enemies.init(currentLevel);
                 }
 
@@ -111,7 +186,7 @@ window.Game = window.Game || {};
                 if (transitionFlash > 0) transitionFlash -= 8;
                 if (transitionFlash < 0) transitionFlash = 0;
 
-                if (transitionTimer >= 120) {
+                if (transitionTimer >= 240) {
                     currentLevelIndex++;
                     if (currentLevelIndex >= levelFiles.length) {
                         state = 'ending';
@@ -155,6 +230,10 @@ window.Game = window.Game || {};
                     Game.Renderer.drawSprite('carrot', cp.x, cp.y + bob, 0);
                 }
 
+                for (var bi = 0; bi < barrels.length; bi++) {
+                    Game.Renderer.drawSprite('barrel', barrels[bi].x, barrels[bi].y, 0);
+                }
+
                 Game.Enemies.draw();
                 Game.Projectile.draw();
                 Game.Player.draw();
@@ -167,6 +246,9 @@ window.Game = window.Game || {};
             case 'level_complete':
                 // Keep drawing the level frozen in background
                 Game.Renderer.drawLevel(currentLevel, animFrame);
+                for (var bj = 0; bj < barrels.length; bj++) {
+                    Game.Renderer.drawSprite('barrel', barrels[bj].x, barrels[bj].y, 0);
+                }
                 Game.Enemies.draw();
                 Game.Player.draw();
 
@@ -175,30 +257,22 @@ window.Game = window.Game || {};
                     Game.Renderer.drawRect(0, 0, 448, 224, 'rgba(255,255,255,' + (transitionFlash / 255) + ')');
                 }
 
-                // Banner
-                var bannerY = 70;
-                Game.Renderer.drawRect(0, bannerY, 448, 50, 'rgba(0,0,0,0.7)');
-                Game.Renderer.drawRect(0, bannerY, 448, 2, '#ffaa00');
-                Game.Renderer.drawRect(0, bannerY + 48, 448, 2, '#ffaa00');
-
                 // Level complete text
+                var bannerY = 70;
                 Game.Renderer.drawTextCentered('LEVEL COMPLETE!', bannerY + 22, '#ffaa00', 16);
                 var completedName = levelNames[currentLevelIndex] || '';
                 Game.Renderer.drawTextCentered(completedName, bannerY + 38, '#ffffff', 10);
 
-                // Stars twinkling in
-                if (transitionTimer > 30) {
-                    var starCount = Math.min(Math.floor((transitionTimer - 30) / 10), 5);
-                    var starX = 224 - (starCount - 1) * 12;
-                    for (var s = 0; s < starCount; s++) {
-                        Game.Renderer.drawText('*', starX + s * 24, bannerY + 12, '#ffff44', 10);
-                    }
-                }
                 break;
 
             case 'ending':
                 Game.Ending.draw();
                 break;
+        }
+
+        // Mute indicator
+        if (Game.Music.isMuted()) {
+            Game.Renderer.drawText('MUTED', 4, 218, '#ff4444', 8);
         }
     }
 
@@ -209,11 +283,23 @@ window.Game = window.Game || {};
     }
 
     window.addEventListener('load', function () {
-        Game.Renderer.init();
-        Game.Input.init();
-        Game.Title.init();
-        Game.Music.init();
-        Game.Music.play('title');
-        gameLoop();
+        Game.Sprites.loadImages(function () {
+            Game.Renderer.init();
+            Game.Input.init();
+            Game.Title.init();
+            Game.Music.init();
+            Game.Music.play('title');
+
+            // Resume audio context on first user interaction (browser autoplay policy)
+            var resumeAudio = function () {
+                Game.Music.play('title');
+                document.removeEventListener('keydown', resumeAudio);
+                document.removeEventListener('click', resumeAudio);
+            };
+            document.addEventListener('keydown', resumeAudio);
+            document.addEventListener('click', resumeAudio);
+
+            gameLoop();
+        });
     });
 })();

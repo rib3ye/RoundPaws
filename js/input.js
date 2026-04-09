@@ -36,6 +36,8 @@ Game.Input = (function () {
             case 'down':  return keys['KeyS'];
             case 'throw': return keys['KeyK'];
             case 'start': return keys['Enter'] || keys['Space'];
+            case 'mute':  return keys['KeyM'];
+            case 'reload': return keys['KeyR'];
             default: return false;
         }
     }
@@ -48,6 +50,8 @@ Game.Input = (function () {
             case 'down':  return justPressed['KeyS'];
             case 'throw': return justPressed['KeyK'];
             case 'start': return justPressed['Enter'] || justPressed['Space'];
+            case 'mute':  return justPressed['KeyM'];
+            case 'reload': return justPressed['KeyR'];
             default: return false;
         }
     }

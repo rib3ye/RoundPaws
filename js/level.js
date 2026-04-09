@@ -2,8 +2,8 @@ window.Game = window.Game || {};
 
 Game.Level = (function () {
     var TILE = 16;
-    var SOLID_TILES = { '=': true, '#': true, 'B': true };
-    var ENTITY_TILES = { 'P': true, 'C': true, 'K': true, 'F': true };
+    var SOLID_TILES = { '=': true, '#': true };
+    var ENTITY_TILES = { 'P': true, 'C': true, 'K': true, 'F': true, 'B': true };
 
     function parse(text) {
         var lines = text.split('\n').filter(function (line) {
@@ -13,6 +13,7 @@ Game.Level = (function () {
         var grid = [];
         var enemies = [];
         var carrots = [];
+        var barrels = [];
         var playerStart = { x: 0, y: 0 };
         var flag = { x: 0, y: 0 };
 
@@ -32,6 +33,9 @@ Game.Level = (function () {
                 } else if (ch === 'F') {
                     flag = { x: col, y: row };
                     gridRow.push('.');
+                } else if (ch === 'B') {
+                    barrels.push({ x: col, y: row });
+                    gridRow.push('.');
                 } else {
                     gridRow.push(ch);
                 }
@@ -48,6 +52,7 @@ Game.Level = (function () {
             playerStart: playerStart,
             enemies: enemies,
             carrots: carrots,
+            barrels: barrels,
             flag: flag
         };
     }
