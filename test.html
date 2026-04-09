@@ -89,6 +89,14 @@ function log(msg) {
     assert(!Game.Level.isSolid(level, 5, 5), 'out of bounds not solid');
 })();
 
+// Test 7b: Hull wall rows not stripped as comments
+(function testHullWallNotComment() {
+    var txt = '# comment\n...\n###\n===';
+    var level = Game.Level.parse(txt);
+    assert(level.grid.length === 3, 'hull row preserved, 3 rows');
+    assert(level.grid[1][0] === '#', 'hull wall tile present');
+})();
+
 // Test 8: isWater checks
 (function testIsWater() {
     var txt = '.~';

@@ -7,7 +7,7 @@ Game.Level = (function () {
 
     function parse(text) {
         var lines = text.split('\n').filter(function (line) {
-            return line.length > 0 && line[0] !== '#';
+            return line.length > 0 && !(line[0] === '#' && line[1] === ' ');
         });
 
         var grid = [];
