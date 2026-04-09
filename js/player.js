@@ -2,12 +2,12 @@ window.Game = window.Game || {};
 
 Game.Player = (function () {
     var TILE = 16;
-    var GRAVITY = 0.15;
-    var MAX_FALL = 2.5;
+    var GRAVITY = 0.09;
+    var MAX_FALL = 2.0;
     var MOVE_SPEED = 1.5;
-    var JUMP_FORCE = -3.2;
-    var JUMP_HOLD_FORCE = -0.12;
-    var JUMP_HOLD_FRAMES = 12;
+    var JUMP_FORCE = -2.5;
+    var JUMP_HOLD_FORCE = -0.08;
+    var JUMP_HOLD_FRAMES = 18;
     var AIR_CONTROL = 0.85;
     var FRICTION = 0.75;
     var ROPE_CLIMB_SPEED = 1.2;
