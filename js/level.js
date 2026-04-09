@@ -75,7 +75,7 @@ Game.Level = (function () {
 
     function load(url, callback) {
         var xhr = new XMLHttpRequest();
-        xhr.open('GET', url);
+        xhr.open('GET', url + '?t=' + Date.now());
         xhr.onload = function () {
             if (xhr.responseText) {
                 callback(parse(xhr.responseText));
