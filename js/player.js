@@ -115,6 +115,20 @@ Game.Player = (function () {
         y += vy;
         resolveCollisionY(level);
 
+        // Ground probe: check 1px below feet for solid ground
+        // Fixes frames where gravity is tiny and feet don't yet overlap the tile
+        if (!onGround && vy >= 0) {
+            var probeRow = Math.floor((y + height + 1) / TILE);
+            var lCol = Math.floor(x / TILE);
+            var rCol = Math.floor((x + width - 1) / TILE);
+            for (var c = lCol; c <= rCol; c++) {
+                if (Game.Level.isSolid(level, c, probeRow) || Game.Level.isThinPlatform(level, c, probeRow)) {
+                    onGround = true;
+                    break;
+                }
+            }
+        }
+
         var feetRow = Math.floor((y + height) / TILE);
         var leftCol = Math.floor(x / TILE);
         var rightCol = Math.floor((x + width) / TILE);
