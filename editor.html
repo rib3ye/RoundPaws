@@ -166,14 +166,28 @@ html, body { height: 100%; overflow: hidden; background: #1a1a2e; color: #eee; f
       </div>
     </div>
     <div>
-      <div class="panel-title">EXPORT</div>
+      <div class="panel-title">SAVE TO GAME</div>
       <div class="filename-display" id="filename-display"></div>
-      <button class="export-btn" id="btn-download">Download PNG</button>
-      <div style="height:6px"></div>
+      <button class="export-btn" id="btn-save-game">Save to Game</button>
+      <div style="height:4px"></div>
+      <button class="export-btn" id="btn-save-all" style="display:none">Save All Frames</button>
+      <div id="save-status" style="font-size:11px; margin-top:4px; min-height:16px;"></div>
+    </div>
+    <div>
+      <div class="panel-title">FILE</div>
+      <button class="export-btn secondary" id="btn-download">Download PNG</button>
+      <div style="height:4px"></div>
       <button class="export-btn secondary" id="btn-download-all" style="display:none">Download All Frames</button>
-      <div style="height:6px"></div>
+      <div style="height:4px"></div>
       <button class="export-btn secondary" id="btn-import">Import PNG</button>
       <input type="file" id="file-input" accept="image/png" style="display:none">
+    </div>
+    <div>
+      <div class="panel-title">GITHUB SETUP</div>
+      <div style="font-size:10px; color:#888; margin-bottom:4px;">Parent: paste a token to enable Save to Game</div>
+      <input type="password" id="gh-token" placeholder="GitHub token" style="width:100%; padding:6px; background:#1a1a3e; border:1px solid #444; color:#fff; font-family:monospace; font-size:11px; border-radius:4px; margin-bottom:4px;">
+      <button class="export-btn secondary" id="btn-save-token" style="font-size:11px; min-height:36px;">Save Token</button>
+      <div id="token-status" style="font-size:10px; margin-top:4px; min-height:14px;"></div>
     </div>
   </div>
 </div>

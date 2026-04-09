@@ -94,6 +94,7 @@
         buildToolbar();
         buildPalette();
         bindEvents();
+        initTokenUI();
         selectSprite(SPRITES[0], 0);
     }
 
@@ -161,10 +162,12 @@
         if (currentSprite.frames <= 1) {
             wrap.style.display = 'none';
             document.getElementById('btn-download-all').style.display = 'none';
+            document.getElementById('btn-save-all').style.display = 'none';
             return;
         }
         wrap.style.display = 'flex';
         document.getElementById('btn-download-all').style.display = 'block';
+        document.getElementById('btn-save-all').style.display = 'block';
 
         var html = '';
         for (var f = 0; f < currentSprite.frames; f++) {
@@ -752,6 +755,182 @@
     }
 
     // ---------------------------------------------------------------
+    // GitHub API — save PNGs directly to tiles/ in the repo
+    // ---------------------------------------------------------------
+
+    var GH_OWNER = 'rib3ye';
+    var GH_REPO = 'RoundPaws';
+    var GH_BRANCH = 'main';
+
+    function getToken() {
+        return localStorage.getItem('roundpaws_gh_token') || '';
+    }
+
+    function saveToken() {
+        var input = document.getElementById('gh-token');
+        var token = input.value.trim();
+        if (!token) {
+            showTokenStatus('No token entered', '#ff4444');
+            return;
+        }
+        localStorage.setItem('roundpaws_gh_token', token);
+        input.value = '';
+        showTokenStatus('Token saved!', '#44ff44');
+    }
+
+    function showTokenStatus(msg, color) {
+        var el = document.getElementById('token-status');
+        el.textContent = msg;
+        el.style.color = color;
+    }
+
+    function showSaveStatus(msg, color) {
+        var el = document.getElementById('save-status');
+        el.textContent = msg;
+        el.style.color = color;
+    }
+
+    function initTokenUI() {
+        var token = getToken();
+        if (token) {
+            showTokenStatus('Token configured', '#888');
+        }
+        document.getElementById('btn-save-token').addEventListener('click', saveToken);
+    }
+
+    /** Convert canvas to base64 PNG data (without the data:image/png;base64, prefix). */
+    function canvasToBase64(canvasEl) {
+        var dataUrl = canvasEl.toDataURL('image/png');
+        return dataUrl.split(',')[1];
+    }
+
+    /** Get the current SHA of a file in the repo (needed for updates). Returns null if file doesn't exist. */
+    function getFileSha(path, token, callback) {
+        var url = 'https://api.github.com/repos/' + GH_OWNER + '/' + GH_REPO + '/contents/' + path + '?ref=' + GH_BRANCH;
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', url);
+        xhr.setRequestHeader('Authorization', 'Bearer ' + token);
+        xhr.setRequestHeader('Accept', 'application/vnd.github.v3+json');
+        xhr.onload = function () {
+            if (xhr.status === 200) {
+                var data = JSON.parse(xhr.responseText);
+                callback(null, data.sha);
+            } else if (xhr.status === 404) {
+                callback(null, null); // file doesn't exist yet
+            } else {
+                callback('HTTP ' + xhr.status);
+            }
+        };
+        xhr.onerror = function () { callback('Network error'); };
+        xhr.send();
+    }
+
+    /** Commit a single PNG file to tiles/ in the repo. */
+    function commitFile(path, base64Content, message, token, callback) {
+        getFileSha(path, token, function (err, sha) {
+            if (err) { callback(err); return; }
+
+            var url = 'https://api.github.com/repos/' + GH_OWNER + '/' + GH_REPO + '/contents/' + path;
+            var body = {
+                message: message,
+                content: base64Content,
+                branch: GH_BRANCH
+            };
+            if (sha) body.sha = sha; // update existing file
+
+            var xhr = new XMLHttpRequest();
+            xhr.open('PUT', url);
+            xhr.setRequestHeader('Authorization', 'Bearer ' + token);
+            xhr.setRequestHeader('Accept', 'application/vnd.github.v3+json');
+            xhr.setRequestHeader('Content-Type', 'application/json');
+            xhr.onload = function () {
+                if (xhr.status === 200 || xhr.status === 201) {
+                    callback(null);
+                } else {
+                    var msg = 'HTTP ' + xhr.status;
+                    try { msg = JSON.parse(xhr.responseText).message; } catch (e) {}
+                    callback(msg);
+                }
+            };
+            xhr.onerror = function () { callback('Network error'); };
+            xhr.send(JSON.stringify(body));
+        });
+    }
+
+    /** Save current frame's PNG to tiles/ via GitHub API. */
+    function saveToGame() {
+        var token = getToken();
+        if (!token) {
+            showSaveStatus('Set up GitHub token first', '#ff4444');
+            return;
+        }
+
+        saveCurrentFrame();
+        var c = pixelsToCanvas(pixels, currentSprite.w, currentSprite.h);
+        var filename = getFilename(currentSprite.name, currentFrame, currentSprite.frames);
+        var path = 'tiles/' + filename;
+        var base64 = canvasToBase64(c);
+
+        showSaveStatus('Saving...', '#ffcc00');
+        commitFile(path, base64, 'Update ' + filename + ' from pixel editor', token, function (err) {
+            if (err) {
+                showSaveStatus('Error: ' + err, '#ff4444');
+            } else {
+                showSaveStatus('Saved! Refresh game to see changes.', '#44ff44');
+            }
+        });
+    }
+
+    /** Save all frames to tiles/ via GitHub API. */
+    function saveAllFrames() {
+        var token = getToken();
+        if (!token) {
+            showSaveStatus('Set up GitHub token first', '#ff4444');
+            return;
+        }
+
+        saveCurrentFrame();
+        var key = currentSprite.name;
+        var total = currentSprite.frames;
+        var done = 0;
+        var errors = [];
+
+        showSaveStatus('Saving ' + total + ' frames...', '#ffcc00');
+
+        for (var f = 0; f < total; f++) {
+            (function (frameIdx) {
+                var px;
+                if (frameData[key] && frameData[key][frameIdx]) {
+                    px = frameData[key][frameIdx];
+                } else {
+                    px = loadFromProgrammatic(currentSprite.name, frameIdx);
+                }
+                var c = pixelsToCanvas(px, currentSprite.w, currentSprite.h);
+                var filename = getFilename(currentSprite.name, frameIdx, total);
+                var path = 'tiles/' + filename;
+                var base64 = canvasToBase64(c);
+
+                // Stagger commits to avoid race conditions on the branch
+                setTimeout(function () {
+                    commitFile(path, base64, 'Update ' + filename + ' from pixel editor', token, function (err) {
+                        done++;
+                        if (err) errors.push(filename + ': ' + err);
+                        if (done === total) {
+                            if (errors.length > 0) {
+                                showSaveStatus('Errors: ' + errors.join('; '), '#ff4444');
+                            } else {
+                                showSaveStatus('All ' + total + ' frames saved!', '#44ff44');
+                            }
+                        } else {
+                            showSaveStatus('Saved ' + done + '/' + total + '...', '#ffcc00');
+                        }
+                    });
+                }, frameIdx * 1500); // 1.5s between commits to avoid SHA conflicts
+            })(f);
+        }
+    }
+
+    // ---------------------------------------------------------------
     // Event binding
     // ---------------------------------------------------------------
 
@@ -774,7 +953,11 @@
             redrawCanvas();
         });
 
-        // Export buttons
+        // Save to Game buttons
+        document.getElementById('btn-save-game').addEventListener('click', saveToGame);
+        document.getElementById('btn-save-all').addEventListener('click', saveAllFrames);
+
+        // File export/import buttons
         document.getElementById('btn-download').addEventListener('click', downloadPNG);
         document.getElementById('btn-download-all').addEventListener('click', downloadAllFrames);
         document.getElementById('btn-import').addEventListener('click', importPNG);
