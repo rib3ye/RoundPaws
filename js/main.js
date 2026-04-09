@@ -1,19 +1,53 @@
+/**
+ * Main Game Loop & State Machine
+ *
+ * Ties all modules together: runs the game loop, manages state transitions,
+ * handles carrot pickups, barrel physics, and enemy collisions.
+ *
+ * Game states:
+ *   title          — Title screen, waiting for player to press Start
+ *   loading        — Loading a level file from disk
+ *   playing        — Active gameplay
+ *   level_complete — Victory screen (240 frame hold, then next level)
+ *   ending         — Story epilogue after beating all levels
+ *
+ * Level progression:
+ *   Level 1: "The Poop Deck"
+ *   Level 2: "Below Deck"
+ *   Level 3: "The Crow's Nest"
+ */
 window.Game = window.Game || {};
 
 (function () {
     var TILE = 16;
+
+    // ---------------------------------------------------------------
+    // Game state
+    // ---------------------------------------------------------------
+
     var state = 'title';
     var currentLevelIndex = 0;
     var currentLevel = null;
-    var animFrame = 0;
-    var animTimer = 0;
+
     var levelNames = ['The Poop Deck', 'Below Deck', "The Crow's Nest"];
     var levelFiles = ['levels/level1.txt', 'levels/level2.txt', 'levels/level3.txt'];
-    var carrotPickups = [];
-    var barrels = [];
+
+    // Global animation counters (shared by water tiles, carrots, flag)
+    var animFrame = 0;
+    var animTimer = 0;
     var flagAnimFrame = 0;
+
+    // Level-complete transition state
     var transitionTimer = 0;
     var transitionFlash = 0;
+
+    // Dynamic objects (re-initialized each level)
+    var carrotPickups = [];
+    var barrels = [];
+
+    // ---------------------------------------------------------------
+    // Level loading
+    // ---------------------------------------------------------------
 
     function startGame() {
         currentLevelIndex = 0;
@@ -36,18 +70,28 @@ window.Game = window.Game || {};
         });
     }
 
+    // ---------------------------------------------------------------
+    // Carrot pickups
+    // ---------------------------------------------------------------
+
+    /** Create pickup objects from level data positions. */
     function initCarrotPickups(level) {
         carrotPickups = [];
         for (var i = 0; i < level.carrots.length; i++) {
             var c = level.carrots[i];
             carrotPickups.push({
-                x: c.x * TILE + 4,
+                x: c.x * TILE + 4,    // centered within tile
                 y: c.y * TILE + 1,
                 collected: false
             });
         }
     }
 
+    // ---------------------------------------------------------------
+    // Barrels (pushable physics objects)
+    // ---------------------------------------------------------------
+
+    /** Create barrel objects from level data positions. */
     function initBarrels(level) {
         barrels = [];
         for (var i = 0; i < level.barrels.length; i++) {
@@ -60,6 +104,7 @@ window.Game = window.Game || {};
         }
     }
 
+    /** Update barrel physics: player pushing, friction, wall collision, crab crushing. */
     function updateBarrels() {
         var BARREL_FRICTION = 0.85;
         var PUSH_SPEED = 1.8;
@@ -72,14 +117,15 @@ window.Game = window.Game || {};
         for (var i = 0; i < barrels.length; i++) {
             var b = barrels[i];
 
-            // Player pushes barrel
+            // Check if player is overlapping this barrel
             if (px + pw > b.x && px < b.x + TILE &&
                 py + ph > b.y && py < b.y + TILE) {
                 var playerCenterX = px + pw / 2;
                 var barrelCenterX = b.x + TILE / 2;
+
+                // Push barrel away from player, push player back
                 if (playerCenterX < barrelCenterX) {
                     b.vx = PUSH_SPEED;
-                    // Push player back
                     Game.Player.setX(b.x - pw);
                 } else {
                     b.vx = -PUSH_SPEED;
@@ -87,12 +133,12 @@ window.Game = window.Game || {};
                 }
             }
 
-            // Apply velocity
+            // Apply velocity and friction
             b.x += b.vx;
             b.vx *= BARREL_FRICTION;
             if (Math.abs(b.vx) < 0.05) b.vx = 0;
 
-            // Wall collision
+            // Stop barrel at walls
             var bCol = Math.floor((b.vx > 0 ? b.x + TILE - 1 : b.x) / TILE);
             var bRow = Math.floor(b.y / TILE);
             if (Game.Level.isSolid(currentLevel, bCol, bRow)) {
@@ -104,31 +150,38 @@ window.Game = window.Game || {};
                 b.vx = 0;
             }
 
-            // Kill crabs when barrel is moving
+            // Moving barrels crush crabs on contact
             if (Math.abs(b.vx) > 0.3) {
                 Game.Enemies.hitTest(b.x, b.y, TILE, TILE);
             }
         }
     }
 
+    // ---------------------------------------------------------------
+    // Main update (called once per frame)
+    // ---------------------------------------------------------------
+
     function update() {
         Game.Input.update();
 
+        // Global hotkeys (work in any state)
         if (Game.Input.wasPressed('mute')) {
             Game.Music.toggleMute();
         }
-
         if (Game.Input.wasPressed('reload')) {
             Game.Sprites.clearCache();
             Game.Sprites.loadImages(function () {});
         }
 
+        // Global animation timer (water, carrot bob, flag wave)
         animTimer++;
         if (animTimer > 12) {
             animTimer = 0;
             animFrame = (animFrame + 1) % 4;
             flagAnimFrame = (flagAnimFrame + 1) % 2;
         }
+
+        // --- State machine ---
 
         switch (state) {
             case 'title':
@@ -141,11 +194,13 @@ window.Game = window.Game || {};
             case 'playing':
                 if (!Game.Player.isAlive()) break;
 
+                // Update all gameplay systems
                 var playerResult = Game.Player.update(currentLevel);
                 Game.Enemies.update(currentLevel);
                 Game.Projectile.update(currentLevel);
                 updateBarrels();
 
+                // Check carrot pickup collisions
                 var px = Game.Player.getX();
                 var py = Game.Player.getY();
                 var pw = Game.Player.getWidth();
@@ -162,6 +217,7 @@ window.Game = window.Game || {};
                     }
                 }
 
+                // Check player-enemy collision (player dies, level resets)
                 if (Game.Enemies.checkPlayerCollision(px, py, pw, ph)) {
                     Game.Player.respawn();
                     Game.Projectile.clear();
@@ -170,8 +226,10 @@ window.Game = window.Game || {};
                     Game.Enemies.init(currentLevel);
                 }
 
+                // Scroll camera to follow player
                 Game.Renderer.updateCamera(px + pw / 2, currentLevel.width);
 
+                // Check for level completion (player reached the flag)
                 if (playerResult === 'level_complete') {
                     state = 'level_complete';
                     transitionTimer = 0;
@@ -183,9 +241,12 @@ window.Game = window.Game || {};
 
             case 'level_complete':
                 transitionTimer++;
+
+                // Fade out the white flash overlay
                 if (transitionFlash > 0) transitionFlash -= 8;
                 if (transitionFlash < 0) transitionFlash = 0;
 
+                // After 240 frames (~4 seconds), advance to next level or ending
                 if (transitionTimer >= 240) {
                     currentLevelIndex++;
                     if (currentLevelIndex >= levelFiles.length) {
@@ -204,6 +265,10 @@ window.Game = window.Game || {};
         }
     }
 
+    // ---------------------------------------------------------------
+    // Main draw (called once per frame, after update)
+    // ---------------------------------------------------------------
+
     function draw() {
         Game.Renderer.clear();
 
@@ -217,12 +282,18 @@ window.Game = window.Game || {};
                 break;
 
             case 'playing':
+                // Draw level tiles
                 Game.Renderer.drawLevel(currentLevel, animFrame);
 
+                // Draw flag at level exit
                 if (currentLevel.flag) {
-                    Game.Renderer.drawSprite('flag', currentLevel.flag.x * TILE, currentLevel.flag.y * TILE, flagAnimFrame);
+                    Game.Renderer.drawSprite('flag',
+                        currentLevel.flag.x * TILE,
+                        currentLevel.flag.y * TILE,
+                        flagAnimFrame);
                 }
 
+                // Draw carrot pickups with gentle floating bob
                 for (var i = 0; i < carrotPickups.length; i++) {
                     var cp = carrotPickups[i];
                     if (cp.collected) continue;
@@ -230,21 +301,24 @@ window.Game = window.Game || {};
                     Game.Renderer.drawSprite('carrot', cp.x, cp.y + bob, 0);
                 }
 
+                // Draw barrels
                 for (var bi = 0; bi < barrels.length; bi++) {
                     Game.Renderer.drawSprite('barrel', barrels[bi].x, barrels[bi].y, 0);
                 }
 
+                // Draw entities and HUD
                 Game.Enemies.draw();
                 Game.Projectile.draw();
                 Game.Player.draw();
                 Game.Player.drawHUD();
 
+                // Level name in upper-right corner
                 var name = levelNames[currentLevelIndex] || '';
                 Game.Renderer.drawText(name, 448 - name.length * 5 - 8, 12, '#fff', 8);
                 break;
 
             case 'level_complete':
-                // Keep drawing the level frozen in background
+                // Freeze the level scene in the background
                 Game.Renderer.drawLevel(currentLevel, animFrame);
                 for (var bj = 0; bj < barrels.length; bj++) {
                     Game.Renderer.drawSprite('barrel', barrels[bj].x, barrels[bj].y, 0);
@@ -252,17 +326,17 @@ window.Game = window.Game || {};
                 Game.Enemies.draw();
                 Game.Player.draw();
 
-                // White flash overlay fading out
+                // White flash overlay (fades out)
                 if (transitionFlash > 0) {
-                    Game.Renderer.drawRect(0, 0, 448, 224, 'rgba(255,255,255,' + (transitionFlash / 255) + ')');
+                    Game.Renderer.drawRect(0, 0, 448, 224,
+                        'rgba(255,255,255,' + (transitionFlash / 255) + ')');
                 }
 
-                // Level complete text
+                // Victory text
                 var bannerY = 70;
                 Game.Renderer.drawTextCentered('LEVEL COMPLETE!', bannerY + 22, '#ffaa00', 16);
                 var completedName = levelNames[currentLevelIndex] || '';
                 Game.Renderer.drawTextCentered(completedName, bannerY + 38, '#ffffff', 10);
-
                 break;
 
             case 'ending':
@@ -270,11 +344,15 @@ window.Game = window.Game || {};
                 break;
         }
 
-        // Mute indicator
+        // Mute indicator (visible in all states)
         if (Game.Music.isMuted()) {
             Game.Renderer.drawText('MUTED', 4, 218, '#ff4444', 8);
         }
     }
+
+    // ---------------------------------------------------------------
+    // Game loop & initialization
+    // ---------------------------------------------------------------
 
     function gameLoop() {
         update();
@@ -290,7 +368,8 @@ window.Game = window.Game || {};
             Game.Music.init();
             Game.Music.play('title');
 
-            // Resume audio context on first user interaction (browser autoplay policy)
+            // Resume audio context on first user interaction (browser autoplay policy).
+            // Some browsers suspend AudioContext until a user gesture occurs.
             var resumeAudio = function () {
                 Game.Music.play('title');
                 document.removeEventListener('keydown', resumeAudio);

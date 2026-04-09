@@ -1,10 +1,49 @@
+/**
+ * Level Loader & Tile Queries
+ *
+ * Parses text-based level files into a level object containing:
+ *   - grid[][]      : 2D array of tile characters
+ *   - playerStart   : {x, y} spawn position
+ *   - enemies[]     : crab spawn positions
+ *   - carrots[]     : carrot pickup positions
+ *   - barrels[]     : pushable barrel positions
+ *   - flag          : level-end flag position
+ *
+ * Tile legend:
+ *   =  Wood plank (solid)
+ *   #  Hull wall (solid)
+ *   ~  Water (kills player)
+ *   -  Thin platform (one-way, stand on top)
+ *   R  Rope (climbable)
+ *   M  Mast (decorative)
+ *   .  Empty space
+ *
+ * Entity markers (extracted during parse, replaced with '.'):
+ *   P  Player start
+ *   C  Crab enemy
+ *   K  Carrot pickup
+ *   F  Flag (level exit)
+ *   B  Barrel (pushable)
+ */
 window.Game = window.Game || {};
 
 Game.Level = (function () {
-    var TILE = 16;
+    var TILE = 16; // pixels per tile
+
+    // Tiles the player and enemies cannot pass through
     var SOLID_TILES = { '=': true, '#': true };
+
+    // Characters that represent entities (removed from the grid during parse)
     var ENTITY_TILES = { 'P': true, 'C': true, 'K': true, 'F': true, 'B': true };
 
+    // ---------------------------------------------------------------
+    // Parsing
+    // ---------------------------------------------------------------
+
+    /**
+     * Parse a level text file into a level object.
+     * Lines starting with "# " are treated as comments and skipped.
+     */
     function parse(text) {
         var lines = text.split('\n').filter(function (line) {
             return line.length > 0 && !(line[0] === '#' && line[1] === ' ');
@@ -19,8 +58,11 @@ Game.Level = (function () {
 
         for (var row = 0; row < lines.length; row++) {
             var gridRow = [];
+
             for (var col = 0; col < lines[row].length; col++) {
                 var ch = lines[row][col];
+
+                // Entity markers are extracted into arrays and replaced with empty space
                 if (ch === 'P') {
                     playerStart = { x: col, y: row };
                     gridRow.push('.');
@@ -40,14 +82,13 @@ Game.Level = (function () {
                     gridRow.push(ch);
                 }
             }
+
             grid.push(gridRow);
         }
 
-        var width = grid.length > 0 ? grid[0].length : 0;
-
         return {
             grid: grid,
-            width: width,
+            width: grid.length > 0 ? grid[0].length : 0,
             height: grid.length,
             playerStart: playerStart,
             enemies: enemies,
@@ -57,6 +98,11 @@ Game.Level = (function () {
         };
     }
 
+    // ---------------------------------------------------------------
+    // Tile queries (used by player, enemies, projectiles, etc.)
+    // ---------------------------------------------------------------
+
+    /** Get the tile character at (col, row). Returns '.' for out-of-bounds. */
     function getTile(level, col, row) {
         if (row < 0 || row >= level.height || col < 0 || col >= level.width) return '.';
         return level.grid[row][col];
@@ -78,6 +124,11 @@ Game.Level = (function () {
         return getTile(level, col, row) === 'R';
     }
 
+    // ---------------------------------------------------------------
+    // Loading
+    // ---------------------------------------------------------------
+
+    /** Fetch a level file by URL and parse it. Cache-busted to support live editing. */
     function load(url, callback) {
         var xhr = new XMLHttpRequest();
         xhr.open('GET', url + '?t=' + Date.now());

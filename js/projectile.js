@@ -1,9 +1,24 @@
+/**
+ * Projectile (Thrown Carrots)
+ *
+ * Manages carrot projectiles thrown by the player. Carrots fly horizontally
+ * and are destroyed when they:
+ *   - Hit a solid wall tile
+ *   - Hit a crab enemy (killing it)
+ *   - Leave the visible screen area
+ */
 window.Game = window.Game || {};
 
 Game.Projectile = (function () {
-    var SPEED = 4;
+    var TILE = 16;
+    var SPEED = 4;         // horizontal speed (pixels per frame)
     var projectiles = [];
 
+    // ---------------------------------------------------------------
+    // Spawning
+    // ---------------------------------------------------------------
+
+    /** Create a new carrot projectile at (x, y) moving in the given direction. */
     function spawn(x, y, direction) {
         projectiles.push({
             x: x,
@@ -15,30 +30,42 @@ Game.Projectile = (function () {
         });
     }
 
+    // ---------------------------------------------------------------
+    // Update
+    // ---------------------------------------------------------------
+
     function update(level) {
+        // Iterate backwards for safe removal via splice
         for (var i = projectiles.length - 1; i >= 0; i--) {
             var p = projectiles[i];
             p.x += p.vx;
 
+            // Remove if off-screen (with some margin)
             var camX = Game.Renderer.getCameraX();
             if (p.x < camX - 20 || p.x > camX + 460) {
                 projectiles.splice(i, 1);
                 continue;
             }
 
-            var col = Math.floor((p.x + p.width / 2) / 16);
-            var row = Math.floor((p.y + p.height / 2) / 16);
+            // Remove if hitting a solid wall
+            var col = Math.floor((p.x + p.width / 2) / TILE);
+            var row = Math.floor((p.y + p.height / 2) / TILE);
             if (Game.Level.isSolid(level, col, row)) {
                 projectiles.splice(i, 1);
                 continue;
             }
 
+            // Remove if hitting an enemy (enemy dies)
             if (Game.Enemies.hitTest(p.x, p.y, p.width, p.height)) {
                 projectiles.splice(i, 1);
                 continue;
             }
         }
     }
+
+    // ---------------------------------------------------------------
+    // Drawing
+    // ---------------------------------------------------------------
 
     function draw() {
         for (var i = 0; i < projectiles.length; i++) {
@@ -48,9 +75,15 @@ Game.Projectile = (function () {
         }
     }
 
+    /** Remove all projectiles (used on death/respawn). */
     function clear() {
         projectiles = [];
     }
 
-    return { spawn: spawn, update: update, draw: draw, clear: clear };
+    return {
+        spawn: spawn,
+        update: update,
+        draw: draw,
+        clear: clear
+    };
 })();

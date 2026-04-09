@@ -1,3 +1,26 @@
+/**
+ * Music & Sound Effects
+ *
+ * NES-style synthesized audio using the Web Audio API. No audio files needed —
+ * all sounds are generated in real-time with oscillators and noise buffers.
+ *
+ * Music voices:
+ *   - pulse()      : Square wave lead melody (loud)
+ *   - pulseQuiet() : Square wave arpeggio accompaniment (soft)
+ *   - tri()        : Triangle wave bass line
+ *   - bass()       : Detuned sawtooth sub-bass
+ *   - pad()        : Triangle wave sustained chords
+ *   - kick()       : Sine wave with pitch sweep (drum)
+ *   - snare()      : Noise burst + sine body (drum)
+ *   - hihat()      : High-passed noise burst (drum)
+ *
+ * Music patterns:
+ *   - gameplay : 512 steps (32 bars), key of E minor, 4 sections (A/B/C/D)
+ *   - title    : 64 steps (4 bars), atmospheric E minor
+ *   - ending   : 64 steps (4 bars), triumphant C major
+ *
+ * Sound effects: jump, collect, shoot, kill, death, flag
+ */
 window.Game = window.Game || {};
 
 Game.Music = (function () {
@@ -6,25 +29,36 @@ Game.Music = (function () {
     var currentPattern = null;
     var intervalId = null;
     var step = 0;
+
     var BPM = 150;
-    var stepTime;
+    var stepTime;         // seconds per step (calculated from BPM)
     var muted = false;
     var volume = 0.3;
+
+    // ---------------------------------------------------------------
+    // Audio context setup
+    // ---------------------------------------------------------------
 
     function init() {
         if (audioCtx) return;
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         masterGain = audioCtx.createGain();
-        masterGain.gain.value = 0.3;
+        masterGain.gain.value = volume;
         masterGain.connect(audioCtx.destination);
-        stepTime = 60 / BPM / 4;
+        stepTime = 60 / BPM / 4; // 16th note duration
     }
 
+    /** Ensure the audio context is running (needed after browser autoplay policy). */
     function ensureContext() {
         if (!audioCtx) init();
         if (audioCtx.state === 'suspended') audioCtx.resume();
     }
 
+    // ---------------------------------------------------------------
+    // Drum voices
+    // ---------------------------------------------------------------
+
+    /** Kick drum — sine wave with rapid pitch drop from 150Hz to 30Hz. */
     function kick(time) {
         var osc = audioCtx.createOscillator();
         var gain = audioCtx.createGain();
@@ -39,7 +73,9 @@ Game.Music = (function () {
         osc.stop(time + 0.2);
     }
 
+    /** Snare drum — white noise burst (high-passed) layered with a short sine body. */
     function snare(time) {
+        // Noise component (crackle)
         var bufferSize = audioCtx.sampleRate * 0.1;
         var buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
         var data = buffer.getChannelData(0);
@@ -60,6 +96,7 @@ Game.Music = (function () {
         noise.start(time);
         noise.stop(time + 0.1);
 
+        // Body component (short sine thump)
         var osc = audioCtx.createOscillator();
         var oscGain = audioCtx.createGain();
         osc.type = 'sine';
@@ -73,6 +110,7 @@ Game.Music = (function () {
         osc.stop(time + 0.08);
     }
 
+    /** Hi-hat — high-passed noise burst. Open hat is longer and louder. */
     function hihat(time, open) {
         var duration = open ? 0.12 : 0.04;
         var bufferSize = audioCtx.sampleRate * duration;
@@ -96,6 +134,11 @@ Game.Music = (function () {
         noise.stop(time + duration);
     }
 
+    // ---------------------------------------------------------------
+    // Melodic voices
+    // ---------------------------------------------------------------
+
+    /** Detuned sawtooth bass — two slightly detuned sawtooths through a lowpass filter. */
     function bass(time, freq, duration) {
         var osc1 = audioCtx.createOscillator();
         var osc2 = audioCtx.createOscillator();
@@ -105,7 +148,7 @@ Game.Music = (function () {
         osc1.type = 'sawtooth';
         osc1.frequency.setValueAtTime(freq, time);
         osc2.type = 'sawtooth';
-        osc2.frequency.setValueAtTime(freq * 1.005, time);
+        osc2.frequency.setValueAtTime(freq * 1.005, time); // slight detune for thickness
 
         filter.type = 'lowpass';
         filter.frequency.setValueAtTime(400, time);
@@ -126,6 +169,7 @@ Game.Music = (function () {
         osc2.stop(time + duration);
     }
 
+    /** Pad — sustained triangle wave with slow attack/release for chords. */
     function pad(time, freq, duration) {
         var osc = audioCtx.createOscillator();
         var gain = audioCtx.createGain();
@@ -135,6 +179,8 @@ Game.Music = (function () {
         osc.frequency.setValueAtTime(freq, time);
         filter.type = 'lowpass';
         filter.frequency.value = 800;
+
+        // Slow fade in, sustain, slow fade out
         gain.gain.setValueAtTime(0, time);
         gain.gain.linearRampToValueAtTime(0.08, time + 0.3);
         gain.gain.setValueAtTime(0.08, time + duration - 0.5);
@@ -147,8 +193,7 @@ Game.Music = (function () {
         osc.stop(time + duration);
     }
 
-    // --- NES-style voices ---
-
+    /** Pulse lead — square wave melody voice (louder, with decay envelope). */
     function pulse(time, freq, dur) {
         var osc = audioCtx.createOscillator();
         var g = audioCtx.createGain();
@@ -157,10 +202,13 @@ Game.Music = (function () {
         g.gain.setValueAtTime(0.13, time);
         g.gain.setValueAtTime(0.10, time + dur * 0.7);
         g.gain.linearRampToValueAtTime(0, time + dur);
-        osc.connect(g); g.connect(masterGain);
-        osc.start(time); osc.stop(time + dur + 0.01);
+        osc.connect(g);
+        g.connect(masterGain);
+        osc.start(time);
+        osc.stop(time + dur + 0.01);
     }
 
+    /** Pulse quiet — softer square wave for arpeggio accompaniment. */
     function pulseQuiet(time, freq, dur) {
         var osc = audioCtx.createOscillator();
         var g = audioCtx.createGain();
@@ -169,10 +217,13 @@ Game.Music = (function () {
         g.gain.setValueAtTime(0.07, time);
         g.gain.setValueAtTime(0.05, time + dur * 0.7);
         g.gain.linearRampToValueAtTime(0, time + dur);
-        osc.connect(g); g.connect(masterGain);
-        osc.start(time); osc.stop(time + dur + 0.01);
+        osc.connect(g);
+        g.connect(masterGain);
+        osc.start(time);
+        osc.stop(time + dur + 0.01);
     }
 
+    /** Triangle bass — clean triangle wave for bass lines. */
     function tri(time, freq, dur) {
         var osc = audioCtx.createOscillator();
         var g = audioCtx.createGain();
@@ -181,25 +232,45 @@ Game.Music = (function () {
         g.gain.setValueAtTime(0.2, time);
         g.gain.setValueAtTime(0.2, time + dur - 0.005);
         g.gain.linearRampToValueAtTime(0, time + dur);
-        osc.connect(g); g.connect(masterGain);
-        osc.start(time); osc.stop(time + dur + 0.01);
+        osc.connect(g);
+        g.connect(masterGain);
+        osc.start(time);
+        osc.stop(time + dur + 0.01);
     }
 
-    // --- Note frequencies ---
+    // ---------------------------------------------------------------
+    // Note frequency table
+    // ---------------------------------------------------------------
+
     var _n = {
-        E2:82.4, Fs2:92.5, G2:98, A2:110, B2:123.5,
-        C3:130.8, D3:146.8, E3:164.8, Fs3:185, G3:196, A3:220, B3:246.9,
-        C4:261.6, D4:293.7, Ds4:311.1, E4:329.6, Fs4:370, G4:392, A4:440, B4:493.9,
-        C5:523.3, D5:587.3, E5:659.3, Fs5:740, G5:784
+        E2:82.4,  Fs2:92.5,  G2:98,    A2:110,   B2:123.5,
+        C3:130.8, D3:146.8,  E3:164.8, Fs3:185,  G3:196,   A3:220,   B3:246.9,
+        C4:261.6, D4:293.7,  Ds4:311.1,E4:329.6, Fs4:370,  G4:392,   A4:440,   B4:493.9,
+        C5:523.3, D5:587.3,  E5:659.3, Fs5:740,  G5:784
     };
 
+    /**
+     * Convert an array of [step, frequency, duration] triples into a
+     * step-indexed lookup object: { step: [freq, dur] }.
+     */
     function buildMap(arr) {
         var m = {};
-        for (var i = 0; i < arr.length; i++) m[arr[i][0]] = [arr[i][1], arr[i][2]];
+        for (var i = 0; i < arr.length; i++) {
+            m[arr[i][0]] = [arr[i][1], arr[i][2]];
+        }
         return m;
     }
 
-    // --- Gameplay: 512 steps (32 bars / 4 sections), key of E minor ---
+    // ---------------------------------------------------------------
+    // Gameplay music data — 512 steps (32 bars), key of E minor
+    //
+    // Structure:
+    //   Section A (bars 1-8):   Main theme — driving beat, 8th-note arps
+    //   Section B (bars 9-16):  Counterpoint — syncopated drums
+    //   Section C (bars 17-24): Bridge — half-time, spacious, quarter-note arps
+    //   Section D (bars 25-32): Climax — full energy, 16th-note arps
+    // ---------------------------------------------------------------
+
     var gpMelody = buildMap([
         // === Section A (0-127): Main theme ===
         // Bar 1 (Em)
@@ -304,8 +375,9 @@ Game.Music = (function () {
         [504,_n.E5,2],[506,_n.D5,2],[508,_n.B4,4]
     ]);
 
+    // Arpeggio chord progressions — [startStep, endStep, [note1, note2, note3]]
     var gpArpChords = [
-        // Section A: Em|Am|C|D|Em|C|Am|B
+        // Section A: Em | Am | C | D | Em | C | Am | B
         [0, 16, [_n.E4, _n.G4, _n.B4]],
         [16, 32, [_n.A3, _n.C4, _n.E4]],
         [32, 48, [_n.C4, _n.E4, _n.G4]],
@@ -314,7 +386,7 @@ Game.Music = (function () {
         [80, 96, [_n.C4, _n.E4, _n.G4]],
         [96, 112, [_n.A3, _n.C4, _n.E4]],
         [112, 128, [_n.B3, _n.Ds4, _n.Fs4]],
-        // Section B: Am|G|C|D|Am|G|Em|D
+        // Section B: Am | G | C | D | Am | G | Em | D
         [128, 144, [_n.A3, _n.C4, _n.E4]],
         [144, 160, [_n.G3, _n.B3, _n.D4]],
         [160, 176, [_n.C4, _n.E4, _n.G4]],
@@ -323,7 +395,7 @@ Game.Music = (function () {
         [208, 224, [_n.G3, _n.B3, _n.D4]],
         [224, 240, [_n.E4, _n.G4, _n.B4]],
         [240, 256, [_n.D4, _n.Fs4, _n.A4]],
-        // Section C: C|D|Em|D|C|G|Am|B
+        // Section C: C | D | Em | D | C | G | Am | B
         [256, 272, [_n.C4, _n.E4, _n.G4]],
         [272, 288, [_n.D4, _n.Fs4, _n.A4]],
         [288, 304, [_n.E4, _n.G4, _n.B4]],
@@ -332,7 +404,7 @@ Game.Music = (function () {
         [336, 352, [_n.G3, _n.B3, _n.D4]],
         [352, 368, [_n.A3, _n.C4, _n.E4]],
         [368, 384, [_n.B3, _n.Ds4, _n.Fs4]],
-        // Section D: Em|D|C|D|Em|G|Am|B
+        // Section D: Em | D | C | D | Em | G | Am | B
         [384, 400, [_n.E4, _n.G4, _n.B4]],
         [400, 416, [_n.D4, _n.Fs4, _n.A4]],
         [416, 432, [_n.C4, _n.E4, _n.G4]],
@@ -343,6 +415,7 @@ Game.Music = (function () {
         [496, 512, [_n.B3, _n.Ds4, _n.Fs4]]
     ];
 
+    // Bass root notes — [startStep, endStep, rootFreq, alternateFreq]
     var gpBassRoots = [
         // Section A
         [0, 16, _n.E2, _n.E3],
@@ -382,7 +455,10 @@ Game.Music = (function () {
         [496, 512, _n.B2, _n.Fs2]
     ];
 
-    // --- Title: 64 steps (4 bars), atmospheric E minor ---
+    // ---------------------------------------------------------------
+    // Title music data — 64 steps (4 bars), atmospheric E minor
+    // ---------------------------------------------------------------
+
     var titleMelody = buildMap([
         [0,_n.E5,6],[8,_n.D5,4],[12,_n.B4,4],
         [16,_n.C5,6],[24,_n.A4,4],[28,_n.G4,4],
@@ -390,7 +466,10 @@ Game.Music = (function () {
         [48,_n.E5,8],[56,_n.D5,4],[60,_n.B4,4]
     ]);
 
-    // --- Ending: 64 steps (4 bars), triumphant C major ---
+    // ---------------------------------------------------------------
+    // Ending music data — 64 steps (4 bars), triumphant C major
+    // ---------------------------------------------------------------
+
     var endMelody = buildMap([
         [0,_n.C5,2],[2,_n.E5,2],[4,_n.G5,4],
         [8,_n.E5,2],[10,_n.C5,2],[12,_n.D5,4],
@@ -402,43 +481,53 @@ Game.Music = (function () {
         [56,_n.C5,8]
     ]);
 
+    // Steps per pattern (for looping)
     var patternLengths = { gameplay: 512, title: 64, ending: 64 };
 
+    // ---------------------------------------------------------------
+    // Pattern playback functions
+    // ---------------------------------------------------------------
+
     var patterns = {
+        /**
+         * Gameplay pattern — schedules all voices for a single step.
+         * Drums, melody, arpeggios, and bass vary by section (A/B/C/D).
+         */
         gameplay: function (s, time) {
             var st = stepTime;
-            var ds = s % 16;
-            var section = Math.floor(s / 128);
+            var ds = s % 16;                    // position within a bar
+            var section = Math.floor(s / 128);  // which section (0=A, 1=B, 2=C, 3=D)
 
-            // Drums — varied per section
+            // --- Drums (varied per section) ---
             if (section === 0) {
-                // A: Standard driving beat
+                // Section A: Standard driving beat
                 if (ds === 0 || ds === 8) kick(time);
                 if (ds === 4 || ds === 12) snare(time);
                 if (ds % 2 === 0) hihat(time, ds === 6);
             } else if (section === 1) {
-                // B: Syncopated
+                // Section B: Syncopated kicks
                 if (ds === 0 || ds === 6 || ds === 10) kick(time);
                 if (ds === 4 || ds === 12) snare(time);
                 if (ds % 2 === 0) hihat(time, ds === 14);
             } else if (section === 2) {
-                // C: Half-time build
+                // Section C: Half-time feel (spacious)
                 if (ds === 0) kick(time);
                 if (ds === 8) snare(time);
                 if (ds % 4 === 0) hihat(time, ds === 12);
             } else {
-                // D: Full energy
+                // Section D: Full energy driving beat
                 if (ds === 0 || ds === 6 || ds === 8 || ds === 14) kick(time);
                 if (ds === 4 || ds === 12) snare(time);
                 if (ds % 2 === 0) hihat(time, ds === 6 || ds === 14);
             }
 
-            // Melody (pulse 1)
+            // --- Melody (pulse lead) ---
             if (gpMelody[s]) {
                 pulse(time, gpMelody[s][0], st * gpMelody[s][1] * 0.9);
             }
 
-            // Arpeggio (pulse 2) — interval varies by section
+            // --- Arpeggio (pulse quiet) — interval varies by section ---
+            // A/B: 8th notes, C: quarter notes, D: 16th notes
             var arpInt = (section === 2) ? 4 : (section === 3) ? 1 : 2;
             if (s % arpInt === 0) {
                 for (var i = 0; i < gpArpChords.length; i++) {
@@ -451,12 +540,13 @@ Game.Music = (function () {
                 }
             }
 
-            // Bass (triangle) — spacious in bridge, driving elsewhere
+            // --- Bass (triangle) — spacious in bridge, driving elsewhere ---
             var bassInt = (section === 2) ? 4 : 2;
             if (s % bassInt === 0) {
                 for (var j = 0; j < gpBassRoots.length; j++) {
                     var b = gpBassRoots[j];
                     if (s >= b[0] && s < b[1]) {
+                        // Alternate between root and alternate note
                         tri(time, (s % (bassInt * 2) === 0) ? b[2] : b[3], st * bassInt * 0.9);
                         break;
                     }
@@ -464,6 +554,7 @@ Game.Music = (function () {
             }
         },
 
+        /** Title pattern — gentle kick/hihat, melody, sustained pad chords, bass. */
         title: function (s, time) {
             var st = stepTime;
             var ds = s % 16;
@@ -477,14 +568,18 @@ Game.Music = (function () {
                 pulse(time, titleMelody[s][0], st * titleMelody[s][1] * 0.9);
             }
 
-            // Pad chords
+            // Sustained pad chords (Em for first half, Am for second half)
             if (s === 0) {
                 var dur = st * 32;
-                pad(time, _n.E4, dur); pad(time, _n.G4, dur); pad(time, _n.B4, dur);
+                pad(time, _n.E4, dur);
+                pad(time, _n.G4, dur);
+                pad(time, _n.B4, dur);
             }
             if (s === 32) {
                 var dur2 = st * 32;
-                pad(time, _n.A3, dur2); pad(time, _n.C4, dur2); pad(time, _n.E4, dur2);
+                pad(time, _n.A3, dur2);
+                pad(time, _n.C4, dur2);
+                pad(time, _n.E4, dur2);
             }
 
             // Bass
@@ -493,6 +588,7 @@ Game.Music = (function () {
             }
         },
 
+        /** Ending pattern — upbeat celebratory feel with arpeggios. */
         ending: function (s, time) {
             var st = stepTime;
             var ds = s % 16;
@@ -506,29 +602,37 @@ Game.Music = (function () {
                 pulse(time, endMelody[s][0], st * endMelody[s][1] * 0.9);
             }
 
-            // Arpeggios
+            // Arpeggios (chord changes every 16 steps)
             if (s % 2 === 0) {
                 var chord;
-                if (s < 16) chord = [_n.C4, _n.E4, _n.G4];
-                else if (s < 32) chord = [_n.G3, _n.B3, _n.D4];
-                else if (s < 48) chord = [_n.A3, _n.C4, _n.E4];
-                else chord = [_n.C4, _n.E4, _n.G4];
+                if (s < 16)      chord = [_n.C4, _n.E4, _n.G4];  // C major
+                else if (s < 32) chord = [_n.G3, _n.B3, _n.D4];  // G major
+                else if (s < 48) chord = [_n.A3, _n.C4, _n.E4];  // A minor
+                else             chord = [_n.C4, _n.E4, _n.G4];  // C major
                 var ci = (s / 2) % chord.length;
                 pulseQuiet(time, chord[ci], st * 2 * 0.85);
             }
 
-            // Bass
+            // Bass (alternates root and fifth)
             if (s % 2 === 0) {
                 var bf;
-                if (s < 16) bf = (s % 4 === 0) ? _n.C3 : _n.G2;
+                if (s < 16)      bf = (s % 4 === 0) ? _n.C3 : _n.G2;
                 else if (s < 32) bf = (s % 4 === 0) ? _n.G2 : _n.D3;
                 else if (s < 48) bf = (s % 4 === 0) ? _n.A2 : _n.E3;
-                else bf = (s % 4 === 0) ? _n.C3 : _n.G2;
+                else             bf = (s % 4 === 0) ? _n.C3 : _n.G2;
                 tri(time, bf, st * 2 * 0.9);
             }
         }
     };
 
+    // ---------------------------------------------------------------
+    // Playback control
+    // ---------------------------------------------------------------
+
+    /**
+     * Start playing a named pattern. Uses a setInterval scheduler that
+     * schedules notes slightly ahead of real time for gapless playback.
+     */
     function play(patternName) {
         ensureContext();
         if (currentPattern === patternName) return;
@@ -542,6 +646,7 @@ Game.Music = (function () {
         var len = patternLengths[patternName] || 16;
         var nextStepTime = audioCtx.currentTime + 0.05;
 
+        // Schedule notes in a tight loop, looking 100ms ahead
         intervalId = setInterval(function () {
             var now = audioCtx.currentTime;
             while (nextStepTime < now + 0.1) {
@@ -577,14 +682,17 @@ Game.Music = (function () {
         return muted;
     }
 
-    // --- Sound Effects ---
+    // ---------------------------------------------------------------
+    // Sound Effects
+    // ---------------------------------------------------------------
 
     function sfx(name) {
         ensureContext();
         var t = audioCtx.currentTime;
+
         switch (name) {
             case 'jump':
-                // Bouncy upward boing
+                // Bouncy upward boing — sine sweep from 250Hz to 600Hz
                 (function () {
                     var osc = audioCtx.createOscillator();
                     var g = audioCtx.createGain();
@@ -594,15 +702,17 @@ Game.Music = (function () {
                     osc.frequency.exponentialRampToValueAtTime(400, t + 0.15);
                     g.gain.setValueAtTime(0.3, t);
                     g.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
-                    osc.connect(g); g.connect(masterGain);
-                    osc.start(t); osc.stop(t + 0.18);
+                    osc.connect(g);
+                    g.connect(masterGain);
+                    osc.start(t);
+                    osc.stop(t + 0.18);
                 })();
                 break;
 
             case 'collect':
-                // Sparkly ascending pickup
+                // Sparkly ascending arpeggio — C5 E5 G5 C6
                 (function () {
-                    var notes = [523, 659, 784, 1047]; // C5 E5 G5 C6
+                    var notes = [523, 659, 784, 1047];
                     for (var i = 0; i < notes.length; i++) {
                         var osc = audioCtx.createOscillator();
                         var g = audioCtx.createGain();
@@ -612,14 +722,16 @@ Game.Music = (function () {
                         g.gain.setValueAtTime(0, t + offset);
                         g.gain.linearRampToValueAtTime(0.15, t + offset + 0.02);
                         g.gain.exponentialRampToValueAtTime(0.001, t + offset + 0.12);
-                        osc.connect(g); g.connect(masterGain);
-                        osc.start(t + offset); osc.stop(t + offset + 0.12);
+                        osc.connect(g);
+                        g.connect(masterGain);
+                        osc.start(t + offset);
+                        osc.stop(t + offset + 0.12);
                     }
                 })();
                 break;
 
             case 'shoot':
-                // Punchy whoosh
+                // Punchy whoosh — sawtooth pitch drop + noise burst
                 (function () {
                     var osc = audioCtx.createOscillator();
                     var g = audioCtx.createGain();
@@ -629,26 +741,36 @@ Game.Music = (function () {
                     g.gain.setValueAtTime(0.2, t);
                     g.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
                     var filt = audioCtx.createBiquadFilter();
-                    filt.type = 'lowpass'; filt.frequency.value = 2000;
-                    osc.connect(filt); filt.connect(g); g.connect(masterGain);
-                    osc.start(t); osc.stop(t + 0.1);
-                    // Noise burst
+                    filt.type = 'lowpass';
+                    filt.frequency.value = 2000;
+                    osc.connect(filt);
+                    filt.connect(g);
+                    g.connect(masterGain);
+                    osc.start(t);
+                    osc.stop(t + 0.1);
+
+                    // High-frequency noise burst
                     var buf = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.06, audioCtx.sampleRate);
                     var d = buf.getChannelData(0);
                     for (var i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
-                    var n = audioCtx.createBufferSource(); n.buffer = buf;
+                    var n = audioCtx.createBufferSource();
+                    n.buffer = buf;
                     var ng = audioCtx.createGain();
                     ng.gain.setValueAtTime(0.1, t);
                     ng.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
                     var hpf = audioCtx.createBiquadFilter();
-                    hpf.type = 'highpass'; hpf.frequency.value = 3000;
-                    n.connect(hpf); hpf.connect(ng); ng.connect(masterGain);
-                    n.start(t); n.stop(t + 0.06);
+                    hpf.type = 'highpass';
+                    hpf.frequency.value = 3000;
+                    n.connect(hpf);
+                    hpf.connect(ng);
+                    ng.connect(masterGain);
+                    n.start(t);
+                    n.stop(t + 0.06);
                 })();
                 break;
 
             case 'kill':
-                // Satisfying pop + crunch
+                // Satisfying pop + crunch — sine drop layered with bandpass noise
                 (function () {
                     var osc = audioCtx.createOscillator();
                     var g = audioCtx.createGain();
@@ -657,25 +779,34 @@ Game.Music = (function () {
                     osc.frequency.exponentialRampToValueAtTime(80, t + 0.15);
                     g.gain.setValueAtTime(0.4, t);
                     g.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
-                    osc.connect(g); g.connect(masterGain);
-                    osc.start(t); osc.stop(t + 0.2);
-                    // Crunch noise
+                    osc.connect(g);
+                    g.connect(masterGain);
+                    osc.start(t);
+                    osc.stop(t + 0.2);
+
+                    // Crunch noise (bandpass filtered)
                     var buf = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.08, audioCtx.sampleRate);
                     var d = buf.getChannelData(0);
                     for (var i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
-                    var n = audioCtx.createBufferSource(); n.buffer = buf;
+                    var n = audioCtx.createBufferSource();
+                    n.buffer = buf;
                     var ng = audioCtx.createGain();
                     ng.gain.setValueAtTime(0.25, t);
                     ng.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
                     var bp = audioCtx.createBiquadFilter();
-                    bp.type = 'bandpass'; bp.frequency.value = 1500; bp.Q.value = 2;
-                    n.connect(bp); bp.connect(ng); ng.connect(masterGain);
-                    n.start(t); n.stop(t + 0.08);
+                    bp.type = 'bandpass';
+                    bp.frequency.value = 1500;
+                    bp.Q.value = 2;
+                    n.connect(bp);
+                    bp.connect(ng);
+                    ng.connect(masterGain);
+                    n.start(t);
+                    n.stop(t + 0.08);
                 })();
                 break;
 
             case 'death':
-                // Sad descending wobble
+                // Sad descending wobble — triangle sweep from 500Hz down to 40Hz
                 (function () {
                     var osc = audioCtx.createOscillator();
                     var g = audioCtx.createGain();
@@ -687,14 +818,17 @@ Game.Music = (function () {
                     g.gain.setValueAtTime(0.3, t);
                     g.gain.setValueAtTime(0.3, t + 0.35);
                     g.gain.exponentialRampToValueAtTime(0.001, t + 0.6);
-                    osc.connect(g); g.connect(masterGain);
-                    osc.start(t); osc.stop(t + 0.6);
+                    osc.connect(g);
+                    g.connect(masterGain);
+                    osc.start(t);
+                    osc.stop(t + 0.6);
                 })();
                 break;
 
             case 'flag':
-                // Victory fanfare — ascending arpeggio
+                // Victory fanfare — ascending arpeggio into sustained chord
                 (function () {
+                    // Ascending notes: C4 E4 G4 C5 E5 G5 C6
                     var notes = [262, 330, 392, 523, 659, 784, 1047];
                     for (var i = 0; i < notes.length; i++) {
                         var osc = audioCtx.createOscillator();
@@ -706,11 +840,14 @@ Game.Music = (function () {
                         g.gain.linearRampToValueAtTime(0.18, t + offset + 0.02);
                         g.gain.setValueAtTime(0.18, t + offset + 0.15);
                         g.gain.exponentialRampToValueAtTime(0.001, t + offset + 0.35);
-                        osc.connect(g); g.connect(masterGain);
-                        osc.start(t + offset); osc.stop(t + offset + 0.35);
+                        osc.connect(g);
+                        g.connect(masterGain);
+                        osc.start(t + offset);
+                        osc.stop(t + offset + 0.35);
                     }
-                    // Final chord
-                    var chord = [523, 659, 784];
+
+                    // Final sustained C major chord (triangle waves)
+                    var chord = [523, 659, 784]; // C5 E5 G5
                     for (var j = 0; j < chord.length; j++) {
                         var o2 = audioCtx.createOscillator();
                         var g2 = audioCtx.createGain();
@@ -720,13 +857,23 @@ Game.Music = (function () {
                         g2.gain.linearRampToValueAtTime(0.12, t + 0.7);
                         g2.gain.setValueAtTime(0.12, t + 1.2);
                         g2.gain.linearRampToValueAtTime(0, t + 1.8);
-                        o2.connect(g2); g2.connect(masterGain);
-                        o2.start(t + 0.6); o2.stop(t + 1.8);
+                        o2.connect(g2);
+                        g2.connect(masterGain);
+                        o2.start(t + 0.6);
+                        o2.stop(t + 1.8);
                     }
                 })();
                 break;
         }
     }
 
-    return { init: init, play: play, stop: stop, setVolume: setVolume, sfx: sfx, toggleMute: toggleMute, isMuted: isMuted };
+    return {
+        init: init,
+        play: play,
+        stop: stop,
+        setVolume: setVolume,
+        sfx: sfx,
+        toggleMute: toggleMute,
+        isMuted: isMuted
+    };
 })();

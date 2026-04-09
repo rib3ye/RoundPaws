@@ -1,10 +1,23 @@
+/**
+ * Ending Screen
+ *
+ * Plays after beating all levels. Shows a sleeping cat on a wooden deck
+ * with floating "Zzz" bubbles and a scrolling story epilogue below.
+ *
+ * The story text scrolls upward in a clipped region and loops back
+ * to the start when it reaches the end.
+ */
 window.Game = window.Game || {};
 
 Game.Ending = (function () {
     var timer = 0;
-    var scrollY = 0;
-    var catFrame = 0;
+    var scrollY = 0;      // current vertical scroll offset for story text
+    var catFrame = 0;     // sleeping cat animation frame (0-2)
     var catTimer = 0;
+
+    // ---------------------------------------------------------------
+    // Story text (scrolls upward)
+    // ---------------------------------------------------------------
 
     var storyLines = [
         '',
@@ -59,6 +72,10 @@ Game.Ending = (function () {
 
     var totalTextHeight;
 
+    // ---------------------------------------------------------------
+    // Init
+    // ---------------------------------------------------------------
+
     function init() {
         timer = 0;
         scrollY = 0;
@@ -67,14 +84,20 @@ Game.Ending = (function () {
         totalTextHeight = storyLines.length * 14 + 120;
     }
 
+    // ---------------------------------------------------------------
+    // Update
+    // ---------------------------------------------------------------
+
     function update() {
         timer++;
-        scrollY += 0.3;
+        scrollY += 0.3; // slow upward scroll
 
+        // Loop back to start when all text has scrolled past
         if (scrollY > totalTextHeight) {
             scrollY = -80;
         }
 
+        // Sleeping cat animation (3 frames, slow cycle for "Zzz" bubbles)
         catTimer++;
         if (catTimer > 40) {
             catTimer = 0;
@@ -84,11 +107,17 @@ Game.Ending = (function () {
         return 'ending';
     }
 
+    // ---------------------------------------------------------------
+    // Drawing
+    // ---------------------------------------------------------------
+
     function draw() {
         var R = Game.Renderer;
 
+        // Very dark background
         R.drawRect(0, 0, 448, 224, '#0a0a1a');
 
+        // Dim background stars (deterministic positions based on index)
         for (var i = 0; i < 15; i++) {
             var sx = ((i * 37 + 13) % 448);
             var sy = ((i * 23 + 7) % 80);
@@ -97,15 +126,20 @@ Game.Ending = (function () {
             }
         }
 
+        // Sleeping cat sprite (centered horizontally)
         R.drawSpriteAbsolute('sleeping_cat', 208, 40, catFrame);
 
+        // Floating "Zzz" sleep bubbles with gentle bob
         var zOffset = Math.sin(timer * 0.05) * 3;
         R.drawText('Z', 250, 38 + zOffset, '#4444aa', 10);
         R.drawText('z', 258, 30 + zOffset, '#333388', 8);
         R.drawText('z', 264, 24 + zOffset, '#222266', 6);
 
+        // Wooden deck separator
         R.drawRect(0, 64, 448, 3, '#BF6530');
         R.drawRect(0, 67, 448, 8, '#8B4513');
+
+        // --- Scrolling story text (clipped to lower region) ---
 
         var textStartY = 85;
         var textAreaHeight = 139;
@@ -118,6 +152,8 @@ Game.Ending = (function () {
 
         for (var j = 0; j < storyLines.length; j++) {
             var lineY = textStartY + j * 14 - scrollY + 100;
+
+            // Only draw lines that are within the visible clipped area
             if (lineY > textStartY - 14 && lineY < textStartY + textAreaHeight + 14) {
                 var color = storyLines[j] === 'THE END' || storyLines[j] === 'THE ADVENTURE OF ROUND PAWS'
                     ? '#ffaa00' : '#8888aa';
@@ -128,5 +164,9 @@ Game.Ending = (function () {
         ctx.restore();
     }
 
-    return { init: init, update: update, draw: draw };
+    return {
+        init: init,
+        update: update,
+        draw: draw
+    };
 })();

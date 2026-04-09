@@ -1,10 +1,31 @@
+/**
+ * Input Manager
+ *
+ * Translates raw keyboard events into game actions.
+ * Call update() once per frame before reading input.
+ *
+ * Controls:
+ *   A / D       — Move left / right
+ *   L           — Jump / climb up
+ *   S           — Climb down
+ *   K           — Throw carrot
+ *   Enter/Space — Start game
+ *   M           — Toggle mute
+ *   R           — Hot-reload tile assets
+ */
 window.Game = window.Game || {};
 
 Game.Input = (function () {
+    // Raw key state from browser events (true while held)
     var keys = {};
+
+    // True only on the frame a key was first pressed
     var justPressed = {};
+
+    // Snapshot of last frame's key state (for edge detection)
     var prevKeys = {};
 
+    /** Bind keyboard listeners. Call once at startup. */
     function init() {
         window.addEventListener('keydown', function (e) {
             keys[e.code] = true;
@@ -16,6 +37,7 @@ Game.Input = (function () {
         });
     }
 
+    /** Detect rising edges. Call once per frame before any input reads. */
     function update() {
         for (var code in keys) {
             justPressed[code] = keys[code] && !prevKeys[code];
@@ -28,33 +50,40 @@ Game.Input = (function () {
         }
     }
 
+    /** Returns true while the action's key is held down. */
     function isDown(action) {
         switch (action) {
-            case 'left':  return keys['KeyA'];
-            case 'right': return keys['KeyD'];
-            case 'up':    return keys['KeyL'];
-            case 'down':  return keys['KeyS'];
-            case 'throw': return keys['KeyK'];
-            case 'start': return keys['Enter'] || keys['Space'];
-            case 'mute':  return keys['KeyM'];
+            case 'left':   return keys['KeyA'];
+            case 'right':  return keys['KeyD'];
+            case 'up':     return keys['KeyL'];
+            case 'down':   return keys['KeyS'];
+            case 'throw':  return keys['KeyK'];
+            case 'start':  return keys['Enter'] || keys['Space'];
+            case 'mute':   return keys['KeyM'];
             case 'reload': return keys['KeyR'];
-            default: return false;
+            default:       return false;
         }
     }
 
+    /** Returns true only on the first frame the action's key is pressed. */
     function wasPressed(action) {
         switch (action) {
-            case 'left':  return justPressed['KeyA'];
-            case 'right': return justPressed['KeyD'];
-            case 'up':    return justPressed['KeyL'];
-            case 'down':  return justPressed['KeyS'];
-            case 'throw': return justPressed['KeyK'];
-            case 'start': return justPressed['Enter'] || justPressed['Space'];
-            case 'mute':  return justPressed['KeyM'];
+            case 'left':   return justPressed['KeyA'];
+            case 'right':  return justPressed['KeyD'];
+            case 'up':     return justPressed['KeyL'];
+            case 'down':   return justPressed['KeyS'];
+            case 'throw':  return justPressed['KeyK'];
+            case 'start':  return justPressed['Enter'] || justPressed['Space'];
+            case 'mute':   return justPressed['KeyM'];
             case 'reload': return justPressed['KeyR'];
-            default: return false;
+            default:       return false;
         }
     }
 
-    return { init: init, update: update, isDown: isDown, wasPressed: wasPressed };
+    return {
+        init: init,
+        update: update,
+        isDown: isDown,
+        wasPressed: wasPressed
+    };
 })();

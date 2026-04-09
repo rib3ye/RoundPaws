@@ -1,35 +1,69 @@
+/**
+ * Player (Round Paws the Cat)
+ *
+ * Handles movement, jumping, rope climbing, sliding, throwing carrots,
+ * collision with the level, and death/respawn.
+ *
+ * Movement modes:
+ *   - Ground: walk left/right, jump, slide (down+jump)
+ *   - Air: reduced control, variable-height jump (hold jump)
+ *   - Rope: climb up/down, jump off sideways (jump + direction)
+ *   - Slide: fast forward dash that kills enemies on contact
+ */
 window.Game = window.Game || {};
 
 Game.Player = (function () {
+    // ---------------------------------------------------------------
+    // Physics constants
+    // ---------------------------------------------------------------
     var TILE = 16;
-    var GRAVITY = 0.09;
-    var MAX_FALL = 2.0;
-    var MOVE_SPEED = 1.5;
-    var JUMP_FORCE = -2.5;
-    var JUMP_HOLD_FORCE = -0.08;
-    var JUMP_HOLD_FRAMES = 18;
-    var AIR_CONTROL = 0.85;
-    var FRICTION = 0.75;
-    var ROPE_CLIMB_SPEED = 1.2;
-    var MAX_CARROTS = 5;
-    var THROW_COOLDOWN = 15;
 
-    var x, y, vx, vy;
-    var width = 12, height = 14;
-    var facing = 1;
+    var GRAVITY         = 0.09;
+    var MAX_FALL        = 2.0;
+    var MOVE_SPEED      = 1.5;
+    var FRICTION        = 0.75;
+    var AIR_CONTROL     = 0.85;  // multiplier for air acceleration
+
+    var JUMP_FORCE      = -2.5;  // initial upward velocity
+    var JUMP_HOLD_FORCE = -0.08; // extra lift while holding jump
+    var JUMP_HOLD_FRAMES = 18;   // max frames you can hold jump for extra height
+
+    var ROPE_CLIMB_SPEED = 1.2;
+
+    var SLIDE_SPEED     = 3.0;
+    var SLIDE_DURATION  = 20;    // frames
+
+    var MAX_CARROTS     = 5;
+    var THROW_COOLDOWN  = 15;    // frames between throws
+
+    // ---------------------------------------------------------------
+    // State
+    // ---------------------------------------------------------------
+    var x, y;             // position (top-left of hitbox)
+    var vx, vy;           // velocity
+    var width = 12;       // hitbox width (smaller than 16px tile for forgiving collisions)
+    var height = 14;      // hitbox height
+    var facing = 1;       // 1 = right, -1 = left
+
     var onGround = false;
     var onRope = false;
-    var jumpHeld = 0;
+    var jumpHeld = 0;     // frames remaining for variable jump height
+
+    var sliding = false;
+    var slideTimer = 0;
+
     var carrots = 0;
     var throwCooldown = 0;
     var alive = true;
+
     var animFrame = 0;
     var animTimer = 0;
-    var startX, startY;
-    var sliding = false;
-    var slideTimer = 0;
-    var SLIDE_SPEED = 3.0;
-    var SLIDE_DURATION = 20;
+
+    var startX, startY;   // respawn position
+
+    // ---------------------------------------------------------------
+    // Init & respawn
+    // ---------------------------------------------------------------
 
     function init(level) {
         startX = level.playerStart.x * TILE + 2;
@@ -51,12 +85,17 @@ Game.Player = (function () {
         slideTimer = 0;
     }
 
+    // ---------------------------------------------------------------
+    // Main update (called once per frame)
+    // ---------------------------------------------------------------
+
     function update(level) {
         if (!alive) return;
 
         var Input = Game.Input;
 
-        var isMoving = Game.Input.isDown('left') || Game.Input.isDown('right');
+        // Animation — faster cycle when moving, slower when idle
+        var isMoving = Input.isDown('left') || Input.isDown('right');
         var animSpeed = isMoving ? 8 : 24;
         animTimer++;
         if (animTimer > animSpeed) {
@@ -66,68 +105,22 @@ Game.Player = (function () {
 
         if (throwCooldown > 0) throwCooldown--;
 
+        // Check if center of player overlaps a rope tile
         var tileCX = Math.floor((x + width / 2) / TILE);
         var tileCY = Math.floor((y + height / 2) / TILE);
         onRope = Game.Level.isRope(level, tileCX, tileCY);
 
+        // --- Movement modes (mutually exclusive) ---
+
         if (onRope) {
-            vy = 0;
-            vx = 0;
-            if (Input.isDown('up')) vy = -ROPE_CLIMB_SPEED;
-            if (Input.isDown('down')) vy = ROPE_CLIMB_SPEED;
-            // Jump off rope when pressing left or right while on rope
-            if (Input.wasPressed('up') && (Input.isDown('left') || Input.isDown('right'))) {
-                onRope = false;
-                vy = JUMP_FORCE;
-                jumpHeld = JUMP_HOLD_FRAMES;
-                facing = Input.isDown('left') ? -1 : 1;
-                vx = facing * MOVE_SPEED;
-                Game.Music.sfx('jump');
-            }
+            updateRopeMovement(Input);
         } else if (sliding) {
-            // Slide movement — override normal controls
-            slideTimer--;
-            vx = facing * SLIDE_SPEED * (slideTimer / SLIDE_DURATION);
-            if (slideTimer <= 0) {
-                sliding = false;
-                vx = 0;
-            }
-            vy += GRAVITY;
-            if (vy > MAX_FALL) vy = MAX_FALL;
+            updateSlideMovement();
         } else {
-            var accel = onGround ? 1 : AIR_CONTROL;
-            if (Input.isDown('left')) {
-                vx -= MOVE_SPEED * 0.15 * accel;
-                facing = -1;
-            }
-            if (Input.isDown('right')) {
-                vx += MOVE_SPEED * 0.15 * accel;
-                facing = 1;
-            }
-            vx *= FRICTION;
-            if (Math.abs(vx) > MOVE_SPEED) vx = MOVE_SPEED * Math.sign(vx);
-            if (Math.abs(vx) < 0.05) vx = 0;
-
-            if (Input.wasPressed('up') && onGround && Input.isDown('down')) {
-                sliding = true;
-                slideTimer = SLIDE_DURATION;
-                vx = facing * SLIDE_SPEED;
-                Game.Music.sfx('jump');
-            } else if (Input.wasPressed('up') && onGround) {
-                vy = JUMP_FORCE;
-                onGround = false;
-                jumpHeld = JUMP_HOLD_FRAMES;
-                Game.Music.sfx('jump');
-            }
-            if (Input.isDown('up') && jumpHeld > 0) {
-                vy += JUMP_HOLD_FORCE;
-                jumpHeld--;
-            }
-            if (!Input.isDown('up')) jumpHeld = 0;
-
-            vy += GRAVITY;
-            if (vy > MAX_FALL) vy = MAX_FALL;
+            updateNormalMovement(Input);
         }
+
+        // --- Throw carrot ---
 
         if (Input.wasPressed('throw') && carrots > 0 && throwCooldown === 0) {
             carrots--;
@@ -136,38 +129,47 @@ Game.Player = (function () {
             Game.Music.sfx('shoot');
         }
 
+        // --- Apply movement and resolve collisions ---
+
         x += vx;
-        if (x < 0) { x = 0; vx = 0; }
+        if (x < 0) { x = 0; vx = 0; } // left boundary
         resolveCollisionX(level);
 
         y += vy;
         resolveCollisionY(level);
 
-        // Ground probe: check 1px below feet for solid ground
-        // Fixes frames where gravity is tiny and feet don't yet overlap the tile
+        // Ground probe: check 1px below feet to detect ground when gravity
+        // hasn't pushed us into the tile yet (prevents 1-frame "not grounded" gaps)
         if (!onGround && vy >= 0) {
             var probeRow = Math.floor((y + height + 1) / TILE);
             var lCol = Math.floor(x / TILE);
             var rCol = Math.floor((x + width - 1) / TILE);
             for (var c = lCol; c <= rCol; c++) {
-                if (Game.Level.isSolid(level, c, probeRow) || Game.Level.isThinPlatform(level, c, probeRow)) {
+                if (Game.Level.isSolid(level, c, probeRow) ||
+                    Game.Level.isThinPlatform(level, c, probeRow)) {
                     onGround = true;
                     break;
                 }
             }
         }
 
+        // --- Hazards ---
+
         var feetRow = Math.floor((y + height) / TILE);
         var leftCol = Math.floor(x / TILE);
         var rightCol = Math.floor((x + width) / TILE);
-        if (Game.Level.isWater(level, leftCol, feetRow) || Game.Level.isWater(level, rightCol, feetRow)) {
+        if (Game.Level.isWater(level, leftCol, feetRow) ||
+            Game.Level.isWater(level, rightCol, feetRow)) {
             die();
         }
+
+        // --- Flag (level exit) ---
 
         if (level.flag) {
             var fx = level.flag.x * TILE;
             var fy = level.flag.y * TILE;
-            if (x + width > fx && x < fx + 8 && y + height > fy && y < fy + 16) {
+            if (x + width > fx && x < fx + 8 &&
+                y + height > fy && y < fy + 16) {
                 return 'level_complete';
             }
         }
@@ -175,36 +177,112 @@ Game.Player = (function () {
         return 'playing';
     }
 
+    // ---------------------------------------------------------------
+    // Movement mode handlers
+    // ---------------------------------------------------------------
+
+    function updateRopeMovement(Input) {
+        vy = 0;
+        vx = 0;
+
+        if (Input.isDown('up'))   vy = -ROPE_CLIMB_SPEED;
+        if (Input.isDown('down')) vy = ROPE_CLIMB_SPEED;
+
+        // Jump off rope sideways (jump + left/right)
+        if (Input.wasPressed('up') && (Input.isDown('left') || Input.isDown('right'))) {
+            onRope = false;
+            vy = JUMP_FORCE;
+            jumpHeld = JUMP_HOLD_FRAMES;
+            facing = Input.isDown('left') ? -1 : 1;
+            vx = facing * MOVE_SPEED;
+            Game.Music.sfx('jump');
+        }
+    }
+
+    function updateSlideMovement() {
+        slideTimer--;
+        // Decelerate linearly over the slide duration
+        vx = facing * SLIDE_SPEED * (slideTimer / SLIDE_DURATION);
+
+        if (slideTimer <= 0) {
+            sliding = false;
+            vx = 0;
+        }
+
+        vy += GRAVITY;
+        if (vy > MAX_FALL) vy = MAX_FALL;
+    }
+
+    function updateNormalMovement(Input) {
+        // Horizontal movement (reduced in air)
+        var accel = onGround ? 1 : AIR_CONTROL;
+        if (Input.isDown('left'))  { vx -= MOVE_SPEED * 0.15 * accel; facing = -1; }
+        if (Input.isDown('right')) { vx += MOVE_SPEED * 0.15 * accel; facing = 1; }
+
+        vx *= FRICTION;
+        if (Math.abs(vx) > MOVE_SPEED) vx = MOVE_SPEED * Math.sign(vx);
+        if (Math.abs(vx) < 0.05) vx = 0;
+
+        // Slide attack: down + jump while on ground
+        if (Input.wasPressed('up') && onGround && Input.isDown('down')) {
+            sliding = true;
+            slideTimer = SLIDE_DURATION;
+            vx = facing * SLIDE_SPEED;
+            Game.Music.sfx('jump');
+        }
+        // Normal jump
+        else if (Input.wasPressed('up') && onGround) {
+            vy = JUMP_FORCE;
+            onGround = false;
+            jumpHeld = JUMP_HOLD_FRAMES;
+            Game.Music.sfx('jump');
+        }
+
+        // Variable-height jump: holding jump adds lift for several frames
+        if (Input.isDown('up') && jumpHeld > 0) {
+            vy += JUMP_HOLD_FORCE;
+            jumpHeld--;
+        }
+        if (!Input.isDown('up')) jumpHeld = 0;
+
+        vy += GRAVITY;
+        if (vy > MAX_FALL) vy = MAX_FALL;
+    }
+
+    // ---------------------------------------------------------------
+    // Collision resolution
+    // ---------------------------------------------------------------
+
+    /** Push player out of solid tiles horizontally. */
     function resolveCollisionX(level) {
-        var top = Math.floor(y / TILE);
+        var top    = Math.floor(y / TILE);
         var bottom = Math.floor((y + height - 1) / TILE);
-        var left = Math.floor(x / TILE);
-        var right = Math.floor((x + width - 1) / TILE);
+        var left   = Math.floor(x / TILE);
+        var right  = Math.floor((x + width - 1) / TILE);
 
         for (var row = top; row <= bottom; row++) {
             for (var col = left; col <= right; col++) {
                 if (Game.Level.isSolid(level, col, row)) {
-                    if (vx > 0) {
-                        x = col * TILE - width;
-                    } else if (vx < 0) {
-                        x = (col + 1) * TILE;
-                    }
+                    if (vx > 0) x = col * TILE - width;
+                    else if (vx < 0) x = (col + 1) * TILE;
                     vx = 0;
                 }
             }
         }
     }
 
+    /** Push player out of solid tiles vertically. Also handles thin platforms. */
     function resolveCollisionY(level) {
-        var top = Math.floor(y / TILE);
+        var top    = Math.floor(y / TILE);
         var bottom = Math.floor((y + height - 1) / TILE);
-        var left = Math.floor(x / TILE);
-        var right = Math.floor((x + width - 1) / TILE);
+        var left   = Math.floor(x / TILE);
+        var right  = Math.floor((x + width - 1) / TILE);
 
         onGround = false;
 
         for (var row = top; row <= bottom; row++) {
             for (var col = left; col <= right; col++) {
+                // Solid walls
                 if (Game.Level.isSolid(level, col, row)) {
                     if (vy > 0) {
                         y = row * TILE - height;
@@ -215,6 +293,8 @@ Game.Player = (function () {
                         vy = 0;
                     }
                 }
+
+                // Thin platforms: only block from above (one-way)
                 if (Game.Level.isThinPlatform(level, col, row) && vy > 0) {
                     var feetY = y + height;
                     var platTop = row * TILE;
@@ -228,6 +308,10 @@ Game.Player = (function () {
         }
     }
 
+    // ---------------------------------------------------------------
+    // Death & items
+    // ---------------------------------------------------------------
+
     function die() {
         alive = false;
         Game.Music.sfx('death');
@@ -238,37 +322,54 @@ Game.Player = (function () {
         if (carrots < MAX_CARROTS) carrots++;
     }
 
+    // ---------------------------------------------------------------
+    // Drawing
+    // ---------------------------------------------------------------
+
     function draw() {
-        var spriteName;
         if (sliding) {
-            spriteName = facing === 1 ? 'cat_slide' : 'cat_slide_left';
-            Game.Renderer.drawSprite(spriteName, x, y + 6, 0);
+            var slideName = facing === 1 ? 'cat_slide' : 'cat_slide_left';
+            Game.Renderer.drawSprite(slideName, x, y + 6, 0); // offset down to look low
         } else {
-            spriteName = facing === 1 ? 'cat' : 'cat_left';
-            Game.Renderer.drawSprite(spriteName, x, y, animFrame);
+            var catName = facing === 1 ? 'cat' : 'cat_left';
+            Game.Renderer.drawSprite(catName, x, y, animFrame);
         }
     }
-
-    function isSliding() { return sliding; }
 
     function drawHUD() {
         Game.Renderer.drawSpriteAbsolute('carrot', 4, 2, 0);
         Game.Renderer.drawText('x ' + carrots, 14, 12, '#ff8800', 8);
     }
 
-    function getX() { return x; }
-    function setX(val) { x = val; }
-    function getY() { return y; }
-    function getWidth() { return width; }
-    function getHeight() { return height; }
-    function isAlive() { return alive; }
-    function getCarrots() { return carrots; }
+    // ---------------------------------------------------------------
+    // Accessors
+    // ---------------------------------------------------------------
+
+    function getX()        { return x; }
+    function setX(val)     { x = val; }
+    function getY()        { return y; }
+    function getWidth()    { return width; }
+    function getHeight()   { return height; }
+    function isAlive()     { return alive; }
+    function isSliding()   { return sliding; }
+    function getCarrots()  { return carrots; }
     function setCarrots(n) { carrots = n; }
 
     return {
-        init: init, update: update, draw: draw, drawHUD: drawHUD,
-        respawn: respawn, collectCarrot: collectCarrot,
-        getX: getX, setX: setX, getY: getY, getWidth: getWidth, getHeight: getHeight,
-        isAlive: isAlive, isSliding: isSliding, getCarrots: getCarrots, setCarrots: setCarrots
+        init: init,
+        update: update,
+        draw: draw,
+        drawHUD: drawHUD,
+        respawn: respawn,
+        collectCarrot: collectCarrot,
+        getX: getX,
+        setX: setX,
+        getY: getY,
+        getWidth: getWidth,
+        getHeight: getHeight,
+        isAlive: isAlive,
+        isSliding: isSliding,
+        getCarrots: getCarrots,
+        setCarrots: setCarrots
     };
 })();
