@@ -30,11 +30,11 @@ Game.Input = (function () {
 
     function isDown(action) {
         switch (action) {
-            case 'left':  return keys['ArrowLeft'] || keys['KeyA'];
-            case 'right': return keys['ArrowRight'] || keys['KeyD'];
-            case 'up':    return keys['ArrowUp'] || keys['KeyW'] || keys['Space'];
-            case 'down':  return keys['ArrowDown'] || keys['KeyS'];
-            case 'throw': return keys['KeyX'] || keys['KeyZ'];
+            case 'left':  return keys['KeyA'];
+            case 'right': return keys['KeyD'];
+            case 'up':    return keys['KeyL'];
+            case 'down':  return keys['KeyS'];
+            case 'throw': return keys['KeyK'];
             case 'start': return keys['Enter'] || keys['Space'];
             default: return false;
         }
@@ -42,11 +42,11 @@ Game.Input = (function () {
 
     function wasPressed(action) {
         switch (action) {
-            case 'left':  return justPressed['ArrowLeft'] || justPressed['KeyA'];
-            case 'right': return justPressed['ArrowRight'] || justPressed['KeyD'];
-            case 'up':    return justPressed['ArrowUp'] || justPressed['KeyW'] || justPressed['Space'];
-            case 'down':  return justPressed['ArrowDown'] || justPressed['KeyS'];
-            case 'throw': return justPressed['KeyX'] || justPressed['KeyZ'];
+            case 'left':  return justPressed['KeyA'];
+            case 'right': return justPressed['KeyD'];
+            case 'up':    return justPressed['KeyL'];
+            case 'down':  return justPressed['KeyS'];
+            case 'throw': return justPressed['KeyK'];
             case 'start': return justPressed['Enter'] || justPressed['Space'];
             default: return false;
         }
