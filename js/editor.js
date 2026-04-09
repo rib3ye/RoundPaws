@@ -715,6 +715,170 @@
         link.click();
     }
 
+    // ---------------------------------------------------------------
+    // ZIP builder — minimal implementation for PNG files
+    // ---------------------------------------------------------------
+
+    /** CRC32 lookup table, built once. */
+    var crcTable = (function () {
+        var table = new Uint32Array(256);
+        for (var n = 0; n < 256; n++) {
+            var c = n;
+            for (var k = 0; k < 8; k++) {
+                c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+            }
+            table[n] = c;
+        }
+        return table;
+    })();
+
+    function crc32(buf) {
+        var crc = 0xFFFFFFFF;
+        for (var i = 0; i < buf.length; i++) {
+            crc = crcTable[(crc ^ buf[i]) & 0xFF] ^ (crc >>> 8);
+        }
+        return (crc ^ 0xFFFFFFFF) >>> 0;
+    }
+
+    function writeU16(arr, offset, val) {
+        arr[offset] = val & 0xFF;
+        arr[offset + 1] = (val >> 8) & 0xFF;
+    }
+
+    function writeU32(arr, offset, val) {
+        arr[offset] = val & 0xFF;
+        arr[offset + 1] = (val >> 8) & 0xFF;
+        arr[offset + 2] = (val >> 16) & 0xFF;
+        arr[offset + 3] = (val >> 24) & 0xFF;
+    }
+
+    /**
+     * Build a ZIP file from an array of {path: string, data: Uint8Array} entries.
+     * Uses STORE (no compression) — fine for small PNGs.
+     */
+    function buildZip(files) {
+        // Calculate total size
+        var localSize = 0;
+        var centralSize = 0;
+        for (var i = 0; i < files.length; i++) {
+            var nameBytes = new TextEncoder().encode(files[i].path);
+            localSize += 30 + nameBytes.length + files[i].data.length;
+            centralSize += 46 + nameBytes.length;
+        }
+        var totalSize = localSize + centralSize + 22;
+        var zip = new Uint8Array(totalSize);
+        var offset = 0;
+        var centralEntries = [];
+
+        // Write local file headers + data
+        for (var i = 0; i < files.length; i++) {
+            var f = files[i];
+            var nameBytes = new TextEncoder().encode(f.path);
+            var crc = crc32(f.data);
+            var headerOffset = offset;
+
+            // Local file header (signature 0x04034b50)
+            writeU32(zip, offset, 0x04034b50); offset += 4;
+            writeU16(zip, offset, 20); offset += 2;   // version needed
+            writeU16(zip, offset, 0); offset += 2;    // flags
+            writeU16(zip, offset, 0); offset += 2;    // compression: STORE
+            writeU16(zip, offset, 0); offset += 2;    // mod time
+            writeU16(zip, offset, 0); offset += 2;    // mod date
+            writeU32(zip, offset, crc); offset += 4;
+            writeU32(zip, offset, f.data.length); offset += 4; // compressed size
+            writeU32(zip, offset, f.data.length); offset += 4; // uncompressed size
+            writeU16(zip, offset, nameBytes.length); offset += 2;
+            writeU16(zip, offset, 0); offset += 2;    // extra field length
+
+            zip.set(nameBytes, offset); offset += nameBytes.length;
+            zip.set(f.data, offset); offset += f.data.length;
+
+            centralEntries.push({ nameBytes: nameBytes, crc: crc, size: f.data.length, headerOffset: headerOffset });
+        }
+
+        // Write central directory
+        var centralStart = offset;
+        for (var i = 0; i < centralEntries.length; i++) {
+            var e = centralEntries[i];
+            writeU32(zip, offset, 0x02014b50); offset += 4; // central dir signature
+            writeU16(zip, offset, 20); offset += 2;  // version made by
+            writeU16(zip, offset, 20); offset += 2;  // version needed
+            writeU16(zip, offset, 0); offset += 2;   // flags
+            writeU16(zip, offset, 0); offset += 2;   // compression
+            writeU16(zip, offset, 0); offset += 2;   // mod time
+            writeU16(zip, offset, 0); offset += 2;   // mod date
+            writeU32(zip, offset, e.crc); offset += 4;
+            writeU32(zip, offset, e.size); offset += 4;
+            writeU32(zip, offset, e.size); offset += 4;
+            writeU16(zip, offset, e.nameBytes.length); offset += 2;
+            writeU16(zip, offset, 0); offset += 2;   // extra length
+            writeU16(zip, offset, 0); offset += 2;   // comment length
+            writeU16(zip, offset, 0); offset += 2;   // disk number
+            writeU16(zip, offset, 0); offset += 2;   // internal attrs
+            writeU32(zip, offset, 0); offset += 4;   // external attrs
+            writeU32(zip, offset, e.headerOffset); offset += 4;
+            zip.set(e.nameBytes, offset); offset += e.nameBytes.length;
+        }
+
+        // End of central directory
+        var centralEnd = offset;
+        writeU32(zip, offset, 0x06054b50); offset += 4;
+        writeU16(zip, offset, 0); offset += 2;   // disk number
+        writeU16(zip, offset, 0); offset += 2;   // central dir disk
+        writeU16(zip, offset, files.length); offset += 2;
+        writeU16(zip, offset, files.length); offset += 2;
+        writeU32(zip, offset, centralEnd - centralStart); offset += 4;
+        writeU32(zip, offset, centralStart); offset += 4;
+        writeU16(zip, offset, 0); offset += 2;   // comment length
+
+        return zip.slice(0, offset);
+    }
+
+    /** Convert a canvas to a Uint8Array of PNG bytes. */
+    function canvasToPNGBytes(canvasEl) {
+        var dataUrl = canvasEl.toDataURL('image/png');
+        var base64 = dataUrl.split(',')[1];
+        var binaryStr = atob(base64);
+        var bytes = new Uint8Array(binaryStr.length);
+        for (var i = 0; i < binaryStr.length; i++) {
+            bytes[i] = binaryStr.charCodeAt(i);
+        }
+        return bytes;
+    }
+
+    /** Download a ZIP of all sprites with tiles/ directory structure. */
+    function downloadAllTilesZip() {
+        saveCurrentFrame();
+        var files = [];
+
+        for (var si = 0; si < SPRITES.length; si++) {
+            var sp = SPRITES[si];
+            for (var f = 0; f < sp.frames; f++) {
+                var px;
+                var key = sp.name;
+                if (frameData[key] && frameData[key][f]) {
+                    px = frameData[key][f];
+                } else {
+                    px = loadFromProgrammatic(sp.name, f);
+                }
+                var c = pixelsToCanvas(px, sp.w, sp.h);
+                var filename = getFilename(sp.name, f, sp.frames);
+                files.push({
+                    path: 'tiles/' + filename,
+                    data: canvasToPNGBytes(c)
+                });
+            }
+        }
+
+        var zipData = buildZip(files);
+        var blob = new Blob([zipData], { type: 'application/zip' });
+        var link = document.createElement('a');
+        link.download = 'roundpaws-tiles.zip';
+        link.href = URL.createObjectURL(blob);
+        link.click();
+        URL.revokeObjectURL(link.href);
+    }
+
     function importPNG() {
         document.getElementById('file-input').click();
     }
@@ -960,6 +1124,7 @@
         // File export/import buttons
         document.getElementById('btn-download').addEventListener('click', downloadPNG);
         document.getElementById('btn-download-all').addEventListener('click', downloadAllFrames);
+        document.getElementById('btn-download-zip').addEventListener('click', downloadAllTilesZip);
         document.getElementById('btn-import').addEventListener('click', importPNG);
         document.getElementById('file-input').addEventListener('change', handleFileImport);
 
