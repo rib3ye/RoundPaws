@@ -927,8 +927,35 @@
         return h === 'localhost' || h === '127.0.0.1';
     }
 
+    // Whether the local save API is available (node server.js is running)
+    var localApiAvailable = false;
+
+    /** Probe the local API at startup to see if node server.js is serving. */
+    function probeLocalApi() {
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', '/api/list-tiles');
+        xhr.onload = function () {
+            if (xhr.status === 200) {
+                localApiAvailable = true;
+                showSaveStatus('Local mode — saves to tiles/ directly', '#88ccff');
+            } else {
+                localApiAvailable = false;
+                showSaveStatus('Run "node server.js" to enable local save', '#ff8844');
+            }
+        };
+        xhr.onerror = function () {
+            localApiAvailable = false;
+            showSaveStatus('Run "node server.js" to enable local save', '#ff8844');
+        };
+        xhr.send();
+    }
+
     /** Save a single PNG to tiles/ via the local dev server. */
     function saveLocal(filename, base64, callback) {
+        if (!localApiAvailable) {
+            callback('Local save requires "node server.js". Use Download PNG or set up GitHub token instead.');
+            return;
+        }
         var xhr = new XMLHttpRequest();
         xhr.open('POST', '/api/save-tile');
         xhr.setRequestHeader('Content-Type', 'application/json');
@@ -941,7 +968,7 @@
                 callback(msg);
             }
         };
-        xhr.onerror = function () { callback('Network error — is server.js running?'); };
+        xhr.onerror = function () { callback('Network error — is node server.js running?'); };
         xhr.send(JSON.stringify({ filename: filename, data: base64 }));
     }
 
@@ -980,9 +1007,9 @@
     function initTokenUI() {
         var ghSetup = document.getElementById('gh-setup');
         if (isLocalhost()) {
-            // No token needed on localhost — hide GitHub setup, show local mode indicator
+            // Probe the local API — if node server.js is running, hide GitHub setup
+            probeLocalApi();
             ghSetup.style.display = 'none';
-            showSaveStatus('Local mode — saves to tiles/ directly', '#88ccff');
             return;
         }
         var token = getToken();
