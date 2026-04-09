@@ -518,6 +518,7 @@ Game.Sprites = (function () {
     /** Clear the generated sprite cache (used when hot-reloading). */
     function clearCache() {
         cache = {};
+        imageOverrides = {};
     }
 
     return {
