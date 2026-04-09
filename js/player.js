@@ -92,6 +92,7 @@ Game.Player = (function () {
                 vy = JUMP_FORCE;
                 onGround = false;
                 jumpHeld = JUMP_HOLD_FRAMES;
+                Game.Music.sfx('jump');
             }
             if (Input.isDown('up') && jumpHeld > 0) {
                 vy += JUMP_HOLD_FORCE;
@@ -107,6 +108,7 @@ Game.Player = (function () {
             carrots--;
             throwCooldown = THROW_COOLDOWN;
             Game.Projectile.spawn(x + width / 2, y + height / 2 - 2, facing);
+            Game.Music.sfx('shoot');
         }
 
         x += vx;
@@ -202,6 +204,7 @@ Game.Player = (function () {
 
     function die() {
         alive = false;
+        Game.Music.sfx('death');
         setTimeout(function () { respawn(); }, 500);
     }
 

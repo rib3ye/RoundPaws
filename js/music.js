@@ -223,5 +223,156 @@ Game.Music = (function () {
         if (masterGain) masterGain.gain.value = v;
     }
 
-    return { init: init, play: play, stop: stop, setVolume: setVolume };
+    // --- Sound Effects ---
+
+    function sfx(name) {
+        ensureContext();
+        var t = audioCtx.currentTime;
+        switch (name) {
+            case 'jump':
+                // Bouncy upward boing
+                (function () {
+                    var osc = audioCtx.createOscillator();
+                    var g = audioCtx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(250, t);
+                    osc.frequency.exponentialRampToValueAtTime(600, t + 0.1);
+                    osc.frequency.exponentialRampToValueAtTime(400, t + 0.15);
+                    g.gain.setValueAtTime(0.3, t);
+                    g.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+                    osc.connect(g); g.connect(masterGain);
+                    osc.start(t); osc.stop(t + 0.18);
+                })();
+                break;
+
+            case 'collect':
+                // Sparkly ascending pickup
+                (function () {
+                    var notes = [523, 659, 784, 1047]; // C5 E5 G5 C6
+                    for (var i = 0; i < notes.length; i++) {
+                        var osc = audioCtx.createOscillator();
+                        var g = audioCtx.createGain();
+                        osc.type = 'square';
+                        osc.frequency.value = notes[i];
+                        var offset = i * 0.05;
+                        g.gain.setValueAtTime(0, t + offset);
+                        g.gain.linearRampToValueAtTime(0.15, t + offset + 0.02);
+                        g.gain.exponentialRampToValueAtTime(0.001, t + offset + 0.12);
+                        osc.connect(g); g.connect(masterGain);
+                        osc.start(t + offset); osc.stop(t + offset + 0.12);
+                    }
+                })();
+                break;
+
+            case 'shoot':
+                // Punchy whoosh
+                (function () {
+                    var osc = audioCtx.createOscillator();
+                    var g = audioCtx.createGain();
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(800, t);
+                    osc.frequency.exponentialRampToValueAtTime(200, t + 0.08);
+                    g.gain.setValueAtTime(0.2, t);
+                    g.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+                    var filt = audioCtx.createBiquadFilter();
+                    filt.type = 'lowpass'; filt.frequency.value = 2000;
+                    osc.connect(filt); filt.connect(g); g.connect(masterGain);
+                    osc.start(t); osc.stop(t + 0.1);
+                    // Noise burst
+                    var buf = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.06, audioCtx.sampleRate);
+                    var d = buf.getChannelData(0);
+                    for (var i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+                    var n = audioCtx.createBufferSource(); n.buffer = buf;
+                    var ng = audioCtx.createGain();
+                    ng.gain.setValueAtTime(0.1, t);
+                    ng.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+                    var hpf = audioCtx.createBiquadFilter();
+                    hpf.type = 'highpass'; hpf.frequency.value = 3000;
+                    n.connect(hpf); hpf.connect(ng); ng.connect(masterGain);
+                    n.start(t); n.stop(t + 0.06);
+                })();
+                break;
+
+            case 'kill':
+                // Satisfying pop + crunch
+                (function () {
+                    var osc = audioCtx.createOscillator();
+                    var g = audioCtx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(400, t);
+                    osc.frequency.exponentialRampToValueAtTime(80, t + 0.15);
+                    g.gain.setValueAtTime(0.4, t);
+                    g.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+                    osc.connect(g); g.connect(masterGain);
+                    osc.start(t); osc.stop(t + 0.2);
+                    // Crunch noise
+                    var buf = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.08, audioCtx.sampleRate);
+                    var d = buf.getChannelData(0);
+                    for (var i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+                    var n = audioCtx.createBufferSource(); n.buffer = buf;
+                    var ng = audioCtx.createGain();
+                    ng.gain.setValueAtTime(0.25, t);
+                    ng.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+                    var bp = audioCtx.createBiquadFilter();
+                    bp.type = 'bandpass'; bp.frequency.value = 1500; bp.Q.value = 2;
+                    n.connect(bp); bp.connect(ng); ng.connect(masterGain);
+                    n.start(t); n.stop(t + 0.08);
+                })();
+                break;
+
+            case 'death':
+                // Sad descending wobble
+                (function () {
+                    var osc = audioCtx.createOscillator();
+                    var g = audioCtx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(500, t);
+                    osc.frequency.exponentialRampToValueAtTime(100, t + 0.4);
+                    osc.frequency.setValueAtTime(80, t + 0.45);
+                    osc.frequency.exponentialRampToValueAtTime(40, t + 0.6);
+                    g.gain.setValueAtTime(0.3, t);
+                    g.gain.setValueAtTime(0.3, t + 0.35);
+                    g.gain.exponentialRampToValueAtTime(0.001, t + 0.6);
+                    osc.connect(g); g.connect(masterGain);
+                    osc.start(t); osc.stop(t + 0.6);
+                })();
+                break;
+
+            case 'flag':
+                // Victory fanfare — ascending arpeggio
+                (function () {
+                    var notes = [262, 330, 392, 523, 659, 784, 1047];
+                    for (var i = 0; i < notes.length; i++) {
+                        var osc = audioCtx.createOscillator();
+                        var g = audioCtx.createGain();
+                        osc.type = 'square';
+                        osc.frequency.value = notes[i];
+                        var offset = i * 0.08;
+                        g.gain.setValueAtTime(0, t + offset);
+                        g.gain.linearRampToValueAtTime(0.18, t + offset + 0.02);
+                        g.gain.setValueAtTime(0.18, t + offset + 0.15);
+                        g.gain.exponentialRampToValueAtTime(0.001, t + offset + 0.35);
+                        osc.connect(g); g.connect(masterGain);
+                        osc.start(t + offset); osc.stop(t + offset + 0.35);
+                    }
+                    // Final chord
+                    var chord = [523, 659, 784];
+                    for (var j = 0; j < chord.length; j++) {
+                        var o2 = audioCtx.createOscillator();
+                        var g2 = audioCtx.createGain();
+                        o2.type = 'triangle';
+                        o2.frequency.value = chord[j];
+                        g2.gain.setValueAtTime(0, t + 0.6);
+                        g2.gain.linearRampToValueAtTime(0.12, t + 0.7);
+                        g2.gain.setValueAtTime(0.12, t + 1.2);
+                        g2.gain.linearRampToValueAtTime(0, t + 1.8);
+                        o2.connect(g2); g2.connect(masterGain);
+                        o2.start(t + 0.6); o2.stop(t + 1.8);
+                    }
+                })();
+                break;
+        }
+    }
+
+    return { init: init, play: play, stop: stop, setVolume: setVolume, sfx: sfx };
 })();

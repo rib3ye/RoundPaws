@@ -93,6 +93,7 @@ Game.Enemies = (function () {
                 py + ph > c.y && py < c.y + c.height) {
                 c.alive = false;
                 c.flashTimer = 10;
+                Game.Music.sfx('kill');
                 return true;
             }
         }
