@@ -11,9 +11,16 @@ Game.Enemies = (function () {
         crabs = [];
         for (var i = 0; i < level.enemies.length; i++) {
             var e = level.enemies[i];
+            // Find ground below spawn: scan downward for solid or thin platform
+            var groundRow = e.y + 1;
+            while (groundRow < level.height &&
+                   !Game.Level.isSolid(level, e.x, groundRow) &&
+                   !Game.Level.isThinPlatform(level, e.x, groundRow)) {
+                groundRow++;
+            }
             crabs.push({
                 x: e.x * TILE,
-                y: e.y * TILE + 4,
+                y: groundRow * TILE - 12, // snap feet to top of ground tile
                 width: 16,
                 height: 12,
                 vx: SPEED,
