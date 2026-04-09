@@ -36,6 +36,9 @@ Game.Player = (function() {
   var MAX_CARROTS = 5;
   var THROW_COOLDOWN = 15; // frames between throws
 
+  var MAX_HEALTH = 3;
+  var INVINCIBLE_FRAMES = 90; // ~1.5 seconds of invincibility after hit
+
   // ---------------------------------------------------------------
   // State
   // ---------------------------------------------------------------
@@ -56,6 +59,8 @@ Game.Player = (function() {
   var carrots = 0;
   var throwCooldown = 0;
   var alive = true;
+  var health = MAX_HEALTH;
+  var invincible = 0; // frames remaining of invincibility
 
   var animFrame = 0;
   var animTimer = 0;
@@ -82,6 +87,8 @@ Game.Player = (function() {
     onRope = false;
     jumpHeld = 0;
     alive = true;
+    health = MAX_HEALTH;
+    invincible = 0;
     throwCooldown = 0;
     sliding = false;
     slideTimer = 0;
@@ -94,6 +101,8 @@ Game.Player = (function() {
   function update(level) {
     if (!alive)
       return;
+
+    if (invincible > 0) invincible--;
 
     var Input = Game.Input;
 
@@ -344,10 +353,21 @@ Game.Player = (function() {
   // Death & items
   // ---------------------------------------------------------------
 
-  function die() {
-    alive = false;
+  /** Take one hit. Returns true if the player died (health reached 0). */
+  function hit() {
+    if (invincible > 0) return false;
+    health--;
+    if (health <= 0) {
+      alive = false;
+      Game.Music.sfx('death');
+      return true;
+    }
+    // Damaged but alive — knockback and invincibility
+    invincible = INVINCIBLE_FRAMES;
+    vy = -2; // small upward knockback
+    vx = -facing * 1.5; // push away from facing direction
     Game.Music.sfx('death');
-    setTimeout(function() { respawn(); }, 500);
+    return false;
   }
 
   function collectCarrot() {
@@ -360,6 +380,9 @@ Game.Player = (function() {
   // ---------------------------------------------------------------
 
   function draw() {
+    // Flash (skip drawing every other frame) during invincibility
+    if (invincible > 0 && Math.floor(invincible / 3) % 2 === 0) return;
+
     if (sliding) {
       var slideName = facing === 1 ? 'cat_slide' : 'cat_slide_left';
       Game.Renderer.drawSprite(slideName, x, y + 6,
@@ -371,8 +394,16 @@ Game.Player = (function() {
   }
 
   function drawHUD() {
-    Game.Renderer.drawSpriteAbsolute('carrot', 4, 2, 0);
-    Game.Renderer.drawText('x ' + carrots, 14, 12, '#ff8800', 8);
+    // Health hearts
+    for (var i = 0; i < MAX_HEALTH; i++) {
+      var hx = 4 + i * 12;
+      var color = i < health ? '#ff2222' : '#442222';
+      // Simple heart shape: two circles and a triangle
+      Game.Renderer.drawText('\u2665', hx, 12, color, 10);
+    }
+    // Carrot count
+    Game.Renderer.drawSpriteAbsolute('carrot', 4 + MAX_HEALTH * 12 + 4, 2, 0);
+    Game.Renderer.drawText('x ' + carrots, 4 + MAX_HEALTH * 12 + 14, 12, '#ff8800', 8);
   }
 
   // ---------------------------------------------------------------
@@ -386,6 +417,7 @@ Game.Player = (function() {
   function getHeight() { return height; }
   function isAlive() { return alive; }
   function isSliding() { return sliding; }
+  function isInvincible() { return invincible > 0; }
   function getCarrots() { return carrots; }
   function setCarrots(n) { carrots = n; }
 
@@ -395,6 +427,7 @@ Game.Player = (function() {
     draw : draw,
     drawHUD : drawHUD,
     respawn : respawn,
+    hit : hit,
     collectCarrot : collectCarrot,
     getX : getX,
     setX : setX,
@@ -403,6 +436,7 @@ Game.Player = (function() {
     getHeight : getHeight,
     isAlive : isAlive,
     isSliding : isSliding,
+    isInvincible : isInvincible,
     getCarrots : getCarrots,
     setCarrots : setCarrots
   };

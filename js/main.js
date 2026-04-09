@@ -223,13 +223,19 @@ window.Game = window.Game || {};
                     }
                 }
 
-                // Check player-enemy collision (player dies, level resets)
+                // Check player-enemy collision
                 if (Game.Enemies.checkPlayerCollision(px, py, pw, ph)) {
-                    Game.Player.respawn();
-                    Game.Projectile.clear();
-                    initCarrotPickups(currentLevel);
-                    initBarrels(currentLevel);
-                    Game.Enemies.init(currentLevel);
+                    var died = Game.Player.hit();
+                    if (died) {
+                        // Full death — reset level after delay
+                        setTimeout(function () {
+                            Game.Player.respawn();
+                            Game.Projectile.clear();
+                            initCarrotPickups(currentLevel);
+                            initBarrels(currentLevel);
+                            Game.Enemies.init(currentLevel);
+                        }, 500);
+                    }
                 }
 
                 // Scroll camera to follow player
