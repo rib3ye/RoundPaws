@@ -366,37 +366,6 @@ window.Game = window.Game || {};
         requestAnimationFrame(gameLoop);
     }
 
-    /** Connect to local dev server's WebSocket for live tile reload. */
-    function connectLiveReload() {
-        if (location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') return;
-        var protocol = location.protocol === 'https:' ? 'wss://' : 'ws://';
-        var url = protocol + location.host + '/ws';
-        try {
-            var ws = new WebSocket(url);
-            ws.onopen = function () {
-                console.log('[Live Reload] Connected');
-            };
-            ws.onmessage = function (e) {
-                if (e.data === 'reload-tiles') {
-                    console.log('[Live Reload] Tiles changed — reloading sprites');
-                    Game.Sprites.clearCache();
-                    Game.Sprites.loadImages(function () {
-                        console.log('[Live Reload] Sprites reloaded');
-                    });
-                }
-            };
-            ws.onclose = function () {
-                console.log('[Live Reload] Disconnected, retrying in 3s...');
-                setTimeout(connectLiveReload, 3000);
-            };
-            ws.onerror = function () {
-                console.log('[Live Reload] Connection error');
-            };
-        } catch (e) {
-            console.log('[Live Reload] Failed to connect:', e);
-        }
-    }
-
     window.addEventListener('load', function () {
         Game.Sprites.loadImages(function () {
             Game.Renderer.init();
@@ -415,7 +384,6 @@ window.Game = window.Game || {};
             document.addEventListener('keydown', resumeAudio);
             document.addEventListener('click', resumeAudio);
 
-            connectLiveReload();
             gameLoop();
         });
     });

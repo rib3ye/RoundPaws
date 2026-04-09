@@ -22,5 +22,28 @@
     <script src="js/ending.js"></script>
     <script src="js/music.js"></script>
     <script src="js/main.js"></script>
+    <script>
+    // Live reload: auto-refresh sprites when tiles/ changes (localhost only)
+    (function() {
+        var h = location.hostname;
+        if (h !== 'localhost' && h !== '127.0.0.1') return;
+        var proto = location.protocol === 'https:' ? 'wss://' : 'ws://';
+        function connect() {
+            var ws = new WebSocket(proto + location.host + '/ws');
+            ws.onopen = function() { console.log('[Live Reload] Connected'); };
+            ws.onmessage = function(e) {
+                if (e.data === 'reload-tiles' && window.Game && Game.Sprites) {
+                    console.log('[Live Reload] Reloading sprites...');
+                    Game.Sprites.clearCache();
+                    Game.Sprites.loadImages(function() {
+                        console.log('[Live Reload] Done');
+                    });
+                }
+            };
+            ws.onclose = function() { setTimeout(connect, 3000); };
+        }
+        connect();
+    })();
+    </script>
 </body>
 </html>
