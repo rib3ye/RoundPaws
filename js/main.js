@@ -151,7 +151,7 @@ window.Game = window.Game || {};
                 for (var i = 0; i < carrotPickups.length; i++) {
                     var cp = carrotPickups[i];
                     if (cp.collected) continue;
-                    var bob = Math.sin((animTimer + i * 20) * 0.15) * 2;
+                    var bob = Math.sin((animTimer + i * 20) * 0.0375) * 2;
                     Game.Renderer.drawSprite('carrot', cp.x, cp.y + bob, 0);
                 }
 
