@@ -307,6 +307,7 @@ Game.Player = (function() {
           else if (vx < 0)
             x = (col + 1) * TILE;
           vx = 0;
+          x = Math.round(x); // prevent sub-pixel jitter against walls
         }
       }
     }
