@@ -919,8 +919,31 @@
     }
 
     // ---------------------------------------------------------------
-    // GitHub API — save PNGs directly to tiles/ in the repo
+    // Save to tiles/ — local server or GitHub API
     // ---------------------------------------------------------------
+
+    function isLocalhost() {
+        var h = location.hostname;
+        return h === 'localhost' || h === '127.0.0.1';
+    }
+
+    /** Save a single PNG to tiles/ via the local dev server. */
+    function saveLocal(filename, base64, callback) {
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', '/api/save-tile');
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        xhr.onload = function () {
+            if (xhr.status === 200) {
+                callback(null);
+            } else {
+                var msg = 'HTTP ' + xhr.status;
+                try { msg = JSON.parse(xhr.responseText).error; } catch (e) {}
+                callback(msg);
+            }
+        };
+        xhr.onerror = function () { callback('Network error — is server.js running?'); };
+        xhr.send(JSON.stringify({ filename: filename, data: base64 }));
+    }
 
     var GH_OWNER = 'rib3ye';
     var GH_REPO = 'RoundPaws';
@@ -955,6 +978,13 @@
     }
 
     function initTokenUI() {
+        var ghSetup = document.getElementById('gh-setup');
+        if (isLocalhost()) {
+            // No token needed on localhost — hide GitHub setup, show local mode indicator
+            ghSetup.style.display = 'none';
+            showSaveStatus('Local mode — saves to tiles/ directly', '#88ccff');
+            return;
+        }
         var token = getToken();
         if (token) {
             showTokenStatus('Token configured', '#888');
@@ -1021,38 +1051,42 @@
         });
     }
 
-    /** Save current frame's PNG to tiles/ via GitHub API. */
+    /** Save current frame's PNG to tiles/. Uses local server on localhost, GitHub API otherwise. */
     function saveToGame() {
-        var token = getToken();
-        if (!token) {
-            showSaveStatus('Set up GitHub token first', '#ff4444');
-            return;
-        }
-
         saveCurrentFrame();
         var c = pixelsToCanvas(pixels, currentSprite.w, currentSprite.h);
         var filename = getFilename(currentSprite.name, currentFrame, currentSprite.frames);
-        var path = 'tiles/' + filename;
         var base64 = canvasToBase64(c);
 
         showSaveStatus('Saving...', '#ffcc00');
-        commitFile(path, base64, 'Update ' + filename + ' from pixel editor', token, function (err) {
-            if (err) {
-                showSaveStatus('Error: ' + err, '#ff4444');
-            } else {
-                showSaveStatus('Saved! Refresh game to see changes.', '#44ff44');
+
+        if (isLocalhost()) {
+            saveLocal(filename, base64, function (err) {
+                if (err) {
+                    showSaveStatus('Error: ' + err, '#ff4444');
+                } else {
+                    showSaveStatus('Saved to tiles/' + filename + '!', '#44ff44');
+                }
+            });
+        } else {
+            var token = getToken();
+            if (!token) {
+                showSaveStatus('Set up GitHub token first', '#ff4444');
+                return;
             }
-        });
+            var path = 'tiles/' + filename;
+            commitFile(path, base64, 'Update ' + filename + ' from pixel editor', token, function (err) {
+                if (err) {
+                    showSaveStatus('Error: ' + err, '#ff4444');
+                } else {
+                    showSaveStatus('Saved! Refresh game to see changes.', '#44ff44');
+                }
+            });
+        }
     }
 
-    /** Save all frames to tiles/ via GitHub API. */
+    /** Save all frames to tiles/. Uses local server on localhost, GitHub API otherwise. */
     function saveAllFrames() {
-        var token = getToken();
-        if (!token) {
-            showSaveStatus('Set up GitHub token first', '#ff4444');
-            return;
-        }
-
         saveCurrentFrame();
         var key = currentSprite.name;
         var total = currentSprite.frames;
@@ -1061,22 +1095,19 @@
 
         showSaveStatus('Saving ' + total + ' frames...', '#ffcc00');
 
-        for (var f = 0; f < total; f++) {
-            (function (frameIdx) {
-                var px;
-                if (frameData[key] && frameData[key][frameIdx]) {
-                    px = frameData[key][frameIdx];
-                } else {
-                    px = loadFromProgrammatic(currentSprite.name, frameIdx);
-                }
-                var c = pixelsToCanvas(px, currentSprite.w, currentSprite.h);
-                var filename = getFilename(currentSprite.name, frameIdx, total);
-                var path = 'tiles/' + filename;
-                var base64 = canvasToBase64(c);
-
-                // Stagger commits to avoid race conditions on the branch
-                setTimeout(function () {
-                    commitFile(path, base64, 'Update ' + filename + ' from pixel editor', token, function (err) {
+        if (isLocalhost()) {
+            for (var f = 0; f < total; f++) {
+                (function (frameIdx) {
+                    var px;
+                    if (frameData[key] && frameData[key][frameIdx]) {
+                        px = frameData[key][frameIdx];
+                    } else {
+                        px = loadFromProgrammatic(currentSprite.name, frameIdx);
+                    }
+                    var c = pixelsToCanvas(px, currentSprite.w, currentSprite.h);
+                    var filename = getFilename(currentSprite.name, frameIdx, total);
+                    var base64 = canvasToBase64(c);
+                    saveLocal(filename, base64, function (err) {
                         done++;
                         if (err) errors.push(filename + ': ' + err);
                         if (done === total) {
@@ -1089,8 +1120,43 @@
                             showSaveStatus('Saved ' + done + '/' + total + '...', '#ffcc00');
                         }
                     });
-                }, frameIdx * 1500); // 1.5s between commits to avoid SHA conflicts
-            })(f);
+                })(f);
+            }
+        } else {
+            var token = getToken();
+            if (!token) {
+                showSaveStatus('Set up GitHub token first', '#ff4444');
+                return;
+            }
+            for (var f = 0; f < total; f++) {
+                (function (frameIdx) {
+                    var px;
+                    if (frameData[key] && frameData[key][frameIdx]) {
+                        px = frameData[key][frameIdx];
+                    } else {
+                        px = loadFromProgrammatic(currentSprite.name, frameIdx);
+                    }
+                    var c = pixelsToCanvas(px, currentSprite.w, currentSprite.h);
+                    var filename = getFilename(currentSprite.name, frameIdx, total);
+                    var path = 'tiles/' + filename;
+                    var base64 = canvasToBase64(c);
+                    setTimeout(function () {
+                        commitFile(path, base64, 'Update ' + filename + ' from pixel editor', token, function (err) {
+                            done++;
+                            if (err) errors.push(filename + ': ' + err);
+                            if (done === total) {
+                                if (errors.length > 0) {
+                                    showSaveStatus('Errors: ' + errors.join('; '), '#ff4444');
+                                } else {
+                                    showSaveStatus('All ' + total + ' frames saved!', '#44ff44');
+                                }
+                            } else {
+                                showSaveStatus('Saved ' + done + '/' + total + '...', '#ffcc00');
+                            }
+                        });
+                    }, frameIdx * 1500);
+                })(f);
+            }
         }
     }
 
