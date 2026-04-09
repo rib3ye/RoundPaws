@@ -14,6 +14,8 @@ body {
 }
 
 canvas {
+    width: 1344px;
+    height: 672px;
     image-rendering: pixelated;
     image-rendering: crisp-edges;
     border: 2px solid #333;

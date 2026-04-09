@@ -77,9 +77,12 @@ Game.Level = (function () {
         var xhr = new XMLHttpRequest();
         xhr.open('GET', url);
         xhr.onload = function () {
-            if (xhr.status === 200) {
+            if (xhr.responseText) {
                 callback(parse(xhr.responseText));
             }
+        };
+        xhr.onerror = function () {
+            console.error('Failed to load level: ' + url);
         };
         xhr.send();
     }
