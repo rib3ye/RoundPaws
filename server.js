@@ -1,18 +1,27 @@
 /**
  * Local dev server for Round Paws
  *
- * Serves static files and provides an API for the pixel art editor
- * to save PNGs directly to the tiles/ folder.
+ * Serves static files over HTTPS and provides an API for the pixel
+ * art editor to save PNGs directly to the tiles/ folder.
  *
  * Usage:  node server.js
- * Then:   http://localhost:3000/editor.html
+ * Then:   https://localhost:3000/editor.html
+ *
+ * On first run, generates a self-signed certificate (stored in .cert/).
+ * Your browser will warn about the cert — click "Advanced" > "Proceed"
+ * once and it's remembered for localhost.
  */
-var http = require('http');
+var https = require('https');
 var fs = require('fs');
 var path = require('path');
+var crypto = require('crypto');
+var childProcess = require('child_process');
 
 var PORT = 3000;
 var ROOT = __dirname;
+var CERT_DIR = path.join(ROOT, '.cert');
+var KEY_PATH = path.join(CERT_DIR, 'localhost.key');
+var CERT_PATH = path.join(CERT_DIR, 'localhost.crt');
 
 var MIME = {
     '.html': 'text/html',
@@ -24,7 +33,46 @@ var MIME = {
     '.ico': 'image/x-icon'
 };
 
-var server = http.createServer(function (req, res) {
+// ---------------------------------------------------------------
+// Self-signed certificate generation
+// ---------------------------------------------------------------
+
+function ensureCert(callback) {
+    if (fs.existsSync(KEY_PATH) && fs.existsSync(CERT_PATH)) {
+        callback();
+        return;
+    }
+
+    if (!fs.existsSync(CERT_DIR)) {
+        fs.mkdirSync(CERT_DIR);
+    }
+
+    console.log('Generating self-signed certificate...');
+
+    // Use openssl to generate a self-signed cert for localhost
+    var cmd = 'openssl req -x509 -newkey rsa:2048 -nodes' +
+        ' -keyout ' + KEY_PATH +
+        ' -out ' + CERT_PATH +
+        ' -days 365' +
+        ' -subj "/CN=localhost"' +
+        ' -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"';
+
+    childProcess.exec(cmd, function (err) {
+        if (err) {
+            console.error('Failed to generate certificate:', err.message);
+            console.error('Make sure openssl is installed.');
+            process.exit(1);
+        }
+        console.log('Certificate saved to .cert/');
+        callback();
+    });
+}
+
+// ---------------------------------------------------------------
+// Request handler
+// ---------------------------------------------------------------
+
+function handleRequest(req, res) {
     // API: save a tile PNG
     if (req.method === 'POST' && req.url === '/api/save-tile') {
         var body = [];
@@ -85,10 +133,27 @@ var server = http.createServer(function (req, res) {
         res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream' });
         res.end(data);
     });
-});
+}
 
-server.listen(PORT, function () {
-    console.log('Round Paws server running at http://localhost:' + PORT);
-    console.log('Game:   http://localhost:' + PORT + '/');
-    console.log('Editor: http://localhost:' + PORT + '/editor.html');
+// ---------------------------------------------------------------
+// Start server
+// ---------------------------------------------------------------
+
+ensureCert(function () {
+    var options = {
+        key: fs.readFileSync(KEY_PATH),
+        cert: fs.readFileSync(CERT_PATH)
+    };
+
+    var server = https.createServer(options, handleRequest);
+
+    server.listen(PORT, function () {
+        console.log('');
+        console.log('Round Paws server running at https://localhost:' + PORT);
+        console.log('Game:   https://localhost:' + PORT + '/');
+        console.log('Editor: https://localhost:' + PORT + '/editor.html');
+        console.log('');
+        console.log('First time? Your browser will show a security warning.');
+        console.log('Click "Advanced" > "Proceed to localhost" to continue.');
+    });
 });
