@@ -150,6 +150,32 @@ function handleRequest(req, res) {
         return;
     }
 
+    // API: load a level file
+    if (req.method === 'GET' && req.url.indexOf('/api/load-level') === 0) {
+        try {
+            var q = req.url.split('?')[1] || '';
+            var params = {};
+            q.split('&').forEach(function (kv) {
+                var p = kv.split('=');
+                params[decodeURIComponent(p[0])] = decodeURIComponent(p[1] || '');
+            });
+            var filename = path.basename(params.file || '');
+            if (!/^level[a-zA-Z0-9_-]+\.txt$/.test(filename)) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Invalid filename' }));
+                return;
+            }
+            var filePath = path.join(ROOT, 'levels', filename);
+            var data = fs.readFileSync(filePath, 'utf8');
+            res.writeHead(200, { 'Content-Type': 'text/plain', 'Cache-Control': 'no-cache' });
+            res.end(data);
+        } catch (e) {
+            res.writeHead(404, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: e.message }));
+        }
+        return;
+    }
+
     // API: tile version (polled by game for live reload)
     if (req.method === 'GET' && req.url === '/api/tile-version') {
         res.writeHead(200, {
