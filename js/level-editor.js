@@ -129,6 +129,7 @@
             var ctrl = ev.ctrlKey || ev.metaKey;
             var k = ev.key.toLowerCase();
             if (ctrl && k === 's') { ev.preventDefault(); handleSave(); }
+            else if (ctrl && k === 'n') { ev.preventDefault(); handleNew(); }
             else if (ctrl && k === 'z' && !ev.shiftKey) { ev.preventDefault(); undo(); }
             else if (ctrl && (k === 'y' || (k === 'z' && ev.shiftKey))) { ev.preventDefault(); redo(); }
             else if (ctrl && k === 'c') { ev.preventDefault(); copySelection(); }
@@ -755,6 +756,9 @@
         pushUndo();
         for (var r = 0; r < state.height; r++) state.grid[r].unshift('.');
         state.width++;
+        // Shift scroll so the existing content stays visually anchored
+        state.scrollX += state.zoom;
+        clampScroll();
         updateStatusBar();
         redraw();
         scheduleAutoSave();
@@ -765,6 +769,8 @@
         pushUndo();
         for (var r = 0; r < state.height; r++) state.grid[r].shift();
         state.width--;
+        state.scrollX -= state.zoom;
+        clampScroll();
         updateStatusBar();
         redraw();
         scheduleAutoSave();
@@ -797,6 +803,9 @@
         for (var c = 0; c < state.width; c++) row.push('.');
         state.grid.unshift(row);
         state.height++;
+        // Shift scroll so the existing content stays visually anchored
+        state.scrollY += state.zoom;
+        clampScroll();
         updateStatusBar();
         redraw();
         scheduleAutoSave();
@@ -807,6 +816,8 @@
         pushUndo();
         state.grid.shift();
         state.height--;
+        state.scrollY -= state.zoom;
+        clampScroll();
         updateStatusBar();
         redraw();
         scheduleAutoSave();
@@ -1089,11 +1100,13 @@
 
         var key = ev.key;
 
-        // Tool hotkeys — number keys to avoid conflicts with WASD pan
-        if (key === '1') { state.currentTool = 'draw';   refreshActivePalette(); updateStatusBar(); ev.preventDefault(); return; }
-        if (key === '2') { state.currentTool = 'erase';  refreshActivePalette(); updateStatusBar(); ev.preventDefault(); return; }
-        if (key === '3') { state.currentTool = 'fill';   refreshActivePalette(); updateStatusBar(); ev.preventDefault(); return; }
-        if (key === '4') { state.currentTool = 'select'; refreshActivePalette(); updateStatusBar(); ev.preventDefault(); return; }
+        // Tool hotkeys — number keys and letter keys both work.
+        // Letter keys D/S take precedence over WASD pan; use arrow keys to
+        // pan down/right instead.
+        if (key === '1' || key === 'd') { state.currentTool = 'draw';   refreshActivePalette(); updateStatusBar(); ev.preventDefault(); return; }
+        if (key === '2' || key === 'e') { state.currentTool = 'erase';  refreshActivePalette(); updateStatusBar(); ev.preventDefault(); return; }
+        if (key === '3' || key === 'f') { state.currentTool = 'fill';   refreshActivePalette(); updateStatusBar(); ev.preventDefault(); return; }
+        if (key === '4' || key === 's') { state.currentTool = 'select'; refreshActivePalette(); updateStatusBar(); ev.preventDefault(); return; }
 
         // Tile hotkeys (match TILE_DEFS.key / ENTITY_DEFS.key)
         var allDefs = TILE_DEFS.concat(ENTITY_DEFS);
@@ -1110,12 +1123,13 @@
             }
         }
 
-        // Pan keys
+        // Pan keys — W/A for up/left, arrow keys for all four directions.
+        // D/S are owned by tool shortcuts above.
         var lower = key.toLowerCase();
         if (lower === 'w' || key === 'ArrowUp')    { panKeys.up = true;    ev.preventDefault(); }
-        if (lower === 's' || key === 'ArrowDown')  { panKeys.down = true;  ev.preventDefault(); }
+        if (key === 'ArrowDown')                   { panKeys.down = true;  ev.preventDefault(); }
         if (lower === 'a' || key === 'ArrowLeft')  { panKeys.left = true;  ev.preventDefault(); }
-        if (lower === 'd' || key === 'ArrowRight') { panKeys.right = true; ev.preventDefault(); }
+        if (key === 'ArrowRight')                  { panKeys.right = true; ev.preventDefault(); }
 
         // Grid toggle
         if (lower === 'g') { state.showGrid = !state.showGrid; redraw(); ev.preventDefault(); }
@@ -1125,9 +1139,9 @@
         var key = ev.key;
         var lower = key.toLowerCase();
         if (lower === 'w' || key === 'ArrowUp')    panKeys.up = false;
-        if (lower === 's' || key === 'ArrowDown')  panKeys.down = false;
+        if (key === 'ArrowDown')                   panKeys.down = false;
         if (lower === 'a' || key === 'ArrowLeft')  panKeys.left = false;
-        if (lower === 'd' || key === 'ArrowRight') panKeys.right = false;
+        if (key === 'ArrowRight')                  panKeys.right = false;
     }
 
     function panStep() {
