@@ -101,6 +101,11 @@
         canvas.addEventListener('mouseleave', handleMouseLeave);
         canvas.addEventListener('contextmenu', function (ev) { ev.preventDefault(); });
 
+        canvas.addEventListener('wheel', handleWheel, { passive: false });
+        window.addEventListener('keydown', handleKeyDown);
+        window.addEventListener('keyup', handleKeyUp);
+        requestAnimationFrame(panStep);
+
         redraw();
         updateStatusBar();
     }
@@ -456,6 +461,80 @@
         if (state.scrollX > maxX) state.scrollX = maxX;
         if (state.scrollY < minY) state.scrollY = minY;
         if (state.scrollY > maxY) state.scrollY = maxY;
+    }
+
+    function handleWheel(ev) {
+        ev.preventDefault();
+        if (ev.ctrlKey || ev.metaKey) {
+            // Zoom toward cursor
+            var rect = canvas.getBoundingClientRect();
+            var mx = ev.clientX - rect.left;
+            var my = ev.clientY - rect.top;
+            var oldZoom = state.zoom;
+            var worldX = (mx + state.scrollX) / oldZoom;
+            var worldY = (my + state.scrollY) / oldZoom;
+
+            var dz = ev.deltaY > 0 ? -4 : 4;
+            state.zoom = Math.max(8, Math.min(48, state.zoom + dz));
+            if (state.zoom === oldZoom) return;
+
+            state.scrollX = worldX * state.zoom - mx;
+            state.scrollY = worldY * state.zoom - my;
+            clampScroll();
+            updateStatusBar();
+            redraw();
+            return;
+        }
+
+        if (ev.shiftKey) {
+            state.scrollX += ev.deltaY;
+        } else {
+            state.scrollY += ev.deltaY;
+            state.scrollX += ev.deltaX;
+        }
+        clampScroll();
+        redraw();
+    }
+
+    var panKeys = {};
+    function handleKeyDown(ev) {
+        // Don't steal keys when typing in an input
+        if (ev.target.tagName === 'INPUT' || ev.target.tagName === 'SELECT') return;
+
+        var key = ev.key.toLowerCase();
+
+        // Pan keys
+        if (key === 'w' || key === 'arrowup')    { panKeys.up = true;    ev.preventDefault(); }
+        if (key === 's' || key === 'arrowdown')  { panKeys.down = true;  ev.preventDefault(); }
+        if (key === 'a' || key === 'arrowleft')  { panKeys.left = true;  ev.preventDefault(); }
+        if (key === 'd' || key === 'arrowright') { panKeys.right = true; ev.preventDefault(); }
+
+        // Tool shortcuts
+        if (key === 'd' && !ev.shiftKey && !ev.ctrlKey && !ev.metaKey && !panKeys.right) {
+            // 'd' conflicts with pan. Tool selection is via sidebar click in this build.
+        }
+    }
+
+    function handleKeyUp(ev) {
+        var key = ev.key.toLowerCase();
+        if (key === 'w' || key === 'arrowup')    panKeys.up = false;
+        if (key === 's' || key === 'arrowdown')  panKeys.down = false;
+        if (key === 'a' || key === 'arrowleft')  panKeys.left = false;
+        if (key === 'd' || key === 'arrowright') panKeys.right = false;
+    }
+
+    function panStep() {
+        var step = 12;
+        var changed = false;
+        if (panKeys.up)    { state.scrollY -= step; changed = true; }
+        if (panKeys.down)  { state.scrollY += step; changed = true; }
+        if (panKeys.left)  { state.scrollX -= step; changed = true; }
+        if (panKeys.right) { state.scrollX += step; changed = true; }
+        if (changed) {
+            clampScroll();
+            redraw();
+        }
+        requestAnimationFrame(panStep);
     }
 
     // Kick off after sprites are loaded
