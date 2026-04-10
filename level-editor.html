@@ -56,6 +56,13 @@ html, body { height: 100%; overflow: hidden; background: #1a1a2e; color: #eee; f
 .level-controls button.primary:hover { background: #c73650; }
 .level-controls button:hover { border-color: #666; }
 .level-controls label { font-size: 10px; color: #888; display: block; margin-top: 4px; }
+.level-controls input[type="text"], .level-controls textarea {
+  width: 100%; padding: 6px; margin-top: 4px;
+  background: #1a1a3e; border: 1px solid #444; border-radius: 4px;
+  color: #fff; font-family: monospace; font-size: 11px;
+  resize: vertical;
+}
+.level-controls textarea { min-height: 48px; }
 
 /* Main canvas area */
 .main {
@@ -100,9 +107,14 @@ html, body { height: 100%; overflow: hidden; background: #1a1a2e; color: #eee; f
       </div>
       <div class="level-controls">
         <h2>LEVEL</h2>
+        <label>Name</label>
+        <input type="text" id="level-name" placeholder="Level name">
+        <label>Description</label>
+        <textarea id="level-description" rows="3" placeholder="Description (one line per row)"></textarea>
         <label>File</label>
         <select id="level-file"></select>
         <button id="btn-load">Load</button>
+        <button id="btn-reset">Reset to Disk</button>
         <button id="btn-new">New Level</button>
         <button id="btn-save" class="primary">Save to Game (Ctrl+S)</button>
         <label>Resize</label>

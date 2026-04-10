@@ -72,6 +72,7 @@
     // DOM
     var canvas, ctx, mainArea;
     var statusPos, statusSize, statusTool, statusTile, statusMsg, statusZoom;
+    var levelNameInput, levelDescInput;
 
     // ---------------------------------------------------------------
     // Init
@@ -89,6 +90,8 @@
         statusTile = document.getElementById('status-tile');
         statusMsg = document.getElementById('status-msg');
         statusZoom = document.getElementById('status-zoom');
+        levelNameInput = document.getElementById('level-name');
+        levelDescInput = document.getElementById('level-description');
 
         buildTilePalette();
         buildEntityPalette();
@@ -112,8 +115,12 @@
         requestAnimationFrame(panStep);
 
         document.getElementById('btn-load').addEventListener('click', handleLoad);
+        document.getElementById('btn-reset').addEventListener('click', handleReset);
         document.getElementById('btn-save').addEventListener('click', handleSave);
         document.getElementById('btn-new').addEventListener('click', handleNew);
+
+        levelNameInput.addEventListener('input', handleMetaInput);
+        levelDescInput.addEventListener('input', handleMetaInput);
 
         document.getElementById('btn-grow-right').addEventListener('click', growRight);
         document.getElementById('btn-shrink-right').addEventListener('click', shrinkRight);
@@ -125,7 +132,7 @@
         document.getElementById('btn-shrink-top').addEventListener('click', shrinkTop);
 
         window.addEventListener('keydown', function (ev) {
-            if (ev.target.tagName === 'INPUT' || ev.target.tagName === 'SELECT') return;
+            if (ev.target.tagName === 'INPUT' || ev.target.tagName === 'SELECT' || ev.target.tagName === 'TEXTAREA') return;
             var ctrl = ev.ctrlKey || ev.metaKey;
             var k = ev.key.toLowerCase();
             if (ctrl && k === 's') { ev.preventDefault(); handleSave(); }
@@ -149,6 +156,7 @@
 
         refreshLevelDropdown();
 
+        syncMetaInputsFromState();
         redraw();
         updateStatusBar();
     }
@@ -548,8 +556,63 @@
         state.filename = filename;
         state.scrollX = 0;
         state.scrollY = 0;
+        syncMetaInputsFromState();
         updateStatusBar();
         redraw();
+    }
+
+    // ---------------------------------------------------------------
+    // Level metadata (name + description) — stored as `# ` comment
+    // lines at the top of the file. The first comment line is the
+    // "name"; any remaining comment lines are the "description", one
+    // line per row.
+    // ---------------------------------------------------------------
+
+    function stripCommentPrefix(line) {
+        // `# foo` -> `foo`, `#` alone -> ``, tolerant of missing space
+        if (line.length >= 2 && line[0] === '#' && line[1] === ' ') return line.substring(2);
+        if (line.length >= 1 && line[0] === '#') return line.substring(1);
+        return line;
+    }
+
+    function commentsToMeta(comments) {
+        if (!comments || comments.length === 0) return { name: '', description: '' };
+        var name = stripCommentPrefix(comments[0]);
+        var descLines = [];
+        for (var i = 1; i < comments.length; i++) {
+            descLines.push(stripCommentPrefix(comments[i]));
+        }
+        return { name: name, description: descLines.join('\n') };
+    }
+
+    function metaToComments(name, description) {
+        var out = [];
+        var trimmedName = (name || '').replace(/\s+$/, '');
+        if (trimmedName.length > 0) {
+            out.push('# ' + trimmedName);
+        }
+        var descLines = (description || '').split('\n');
+        // Drop trailing blank lines so they don't round-trip into stray comments
+        while (descLines.length > 0 && descLines[descLines.length - 1].replace(/\s+$/, '') === '') {
+            descLines.pop();
+        }
+        for (var i = 0; i < descLines.length; i++) {
+            var line = descLines[i].replace(/\s+$/, '');
+            out.push(line.length > 0 ? '# ' + line : '#');
+        }
+        return out;
+    }
+
+    function syncMetaInputsFromState() {
+        if (!levelNameInput || !levelDescInput) return;
+        var meta = commentsToMeta(state.comments);
+        levelNameInput.value = meta.name;
+        levelDescInput.value = meta.description;
+    }
+
+    function handleMetaInput() {
+        state.comments = metaToComments(levelNameInput.value, levelDescInput.value);
+        scheduleAutoSave();
     }
 
     // ---------------------------------------------------------------
@@ -615,6 +678,24 @@
         });
     }
 
+    function handleReset() {
+        var select = document.getElementById('level-file');
+        var filename = select.value;
+        if (!filename) { showMessage('No file selected'); return; }
+
+        if (!confirm('Discard current edits and reload ' + filename + ' from disk?')) return;
+
+        // Drop any localStorage draft so the next Load won't offer to restore it
+        localStorage.removeItem('level-editor:' + filename);
+
+        fetchLevel(filename).then(function (text) {
+            loadLevelText(text, filename);
+            showMessage('Reset to disk: ' + filename);
+        }).catch(function (e) {
+            showMessage('Reset failed: ' + e.message);
+        });
+    }
+
     function handleSave() {
         var filename = state.filename;
         if (!filename || filename === 'untitled.txt') {
@@ -655,6 +736,7 @@
         }
         newBlankLevel(w, h, fn);
         state.comments = ['# ' + fn.replace('.txt', '')];
+        syncMetaInputsFromState();
         updateStatusBar();
         redraw();
         showMessage('New level created');
@@ -1096,7 +1178,7 @@
 
     var panKeys = {};
     function handleKeyDown(ev) {
-        if (ev.target.tagName === 'INPUT' || ev.target.tagName === 'SELECT') return;
+        if (ev.target.tagName === 'INPUT' || ev.target.tagName === 'SELECT' || ev.target.tagName === 'TEXTAREA') return;
 
         var key = ev.key;
 
