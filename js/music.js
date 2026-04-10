@@ -35,6 +35,11 @@ Game.Music = (function () {
     var muted = false;
     var volume = 0.3;
 
+    // Pre-allocated noise buffers (created in init, reused by drums)
+    var snareNoiseBuffer = null;
+    var hihatClosedBuffer = null;
+    var hihatOpenBuffer = null;
+
     // ---------------------------------------------------------------
     // Audio context setup
     // ---------------------------------------------------------------
@@ -46,6 +51,31 @@ Game.Music = (function () {
         masterGain.gain.value = volume;
         masterGain.connect(audioCtx.destination);
         stepTime = 60 / BPM / 4; // 16th note duration
+
+        // Pre-allocate noise buffers for drums
+        snareNoiseBuffer = createNoiseBuffer(0.1);
+        hihatClosedBuffer = createNoiseBuffer(0.04);
+        hihatOpenBuffer = createNoiseBuffer(0.12);
+    }
+
+    /** Create a white noise AudioBuffer of the given duration in seconds. */
+    function createNoiseBuffer(duration) {
+        var size = audioCtx.sampleRate * duration;
+        var buffer = audioCtx.createBuffer(1, size, audioCtx.sampleRate);
+        var data = buffer.getChannelData(0);
+        for (var i = 0; i < size; i++) {
+            data[i] = Math.random() * 2 - 1;
+        }
+        return buffer;
+    }
+
+    /** Schedule all given nodes to disconnect when source ends. */
+    function cleanup(source, nodes) {
+        source.onended = function () {
+            for (var i = 0; i < nodes.length; i++) {
+                nodes[i].disconnect();
+            }
+        };
     }
 
     /** Ensure the audio context is running (needed after browser autoplay policy). */
@@ -71,19 +101,14 @@ Game.Music = (function () {
         gain.connect(masterGain);
         osc.start(time);
         osc.stop(time + 0.2);
+        cleanup(osc, [osc, gain]);
     }
 
     /** Snare drum — white noise burst (high-passed) layered with a short sine body. */
     function snare(time) {
-        // Noise component (crackle)
-        var bufferSize = audioCtx.sampleRate * 0.1;
-        var buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-        var data = buffer.getChannelData(0);
-        for (var i = 0; i < bufferSize; i++) {
-            data[i] = Math.random() * 2 - 1;
-        }
+        // Noise component (crackle) — reuse pre-allocated buffer
         var noise = audioCtx.createBufferSource();
-        noise.buffer = buffer;
+        noise.buffer = snareNoiseBuffer;
         var noiseGain = audioCtx.createGain();
         noiseGain.gain.setValueAtTime(0.5, time);
         noiseGain.gain.exponentialRampToValueAtTime(0.001, time + 0.1);
@@ -95,6 +120,7 @@ Game.Music = (function () {
         noiseGain.connect(masterGain);
         noise.start(time);
         noise.stop(time + 0.1);
+        cleanup(noise, [noise, filter, noiseGain]);
 
         // Body component (short sine thump)
         var osc = audioCtx.createOscillator();
@@ -108,19 +134,15 @@ Game.Music = (function () {
         oscGain.connect(masterGain);
         osc.start(time);
         osc.stop(time + 0.08);
+        cleanup(osc, [osc, oscGain]);
     }
 
     /** Hi-hat — high-passed noise burst. Open hat is longer and louder. */
     function hihat(time, open) {
         var duration = open ? 0.12 : 0.04;
-        var bufferSize = audioCtx.sampleRate * duration;
-        var buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-        var data = buffer.getChannelData(0);
-        for (var i = 0; i < bufferSize; i++) {
-            data[i] = Math.random() * 2 - 1;
-        }
+        // Reuse pre-allocated noise buffer
         var noise = audioCtx.createBufferSource();
-        noise.buffer = buffer;
+        noise.buffer = open ? hihatOpenBuffer : hihatClosedBuffer;
         var gain = audioCtx.createGain();
         gain.gain.setValueAtTime(open ? 0.2 : 0.15, time);
         gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
@@ -132,6 +154,7 @@ Game.Music = (function () {
         gain.connect(masterGain);
         noise.start(time);
         noise.stop(time + duration);
+        cleanup(noise, [noise, filter, gain]);
     }
 
     // ---------------------------------------------------------------
@@ -167,6 +190,7 @@ Game.Music = (function () {
         osc1.stop(time + duration);
         osc2.start(time);
         osc2.stop(time + duration);
+        cleanup(osc1, [osc1, osc2, filter, gain]);
     }
 
     /** Pad — sustained triangle wave with slow attack/release for chords. */
@@ -191,6 +215,7 @@ Game.Music = (function () {
         gain.connect(masterGain);
         osc.start(time);
         osc.stop(time + duration);
+        cleanup(osc, [osc, filter, gain]);
     }
 
     /** Pulse lead — square wave melody voice (louder, with decay envelope). */
@@ -206,6 +231,7 @@ Game.Music = (function () {
         g.connect(masterGain);
         osc.start(time);
         osc.stop(time + dur + 0.01);
+        cleanup(osc, [osc, g]);
     }
 
     /** Pulse quiet — softer square wave for arpeggio accompaniment. */
@@ -221,6 +247,7 @@ Game.Music = (function () {
         g.connect(masterGain);
         osc.start(time);
         osc.stop(time + dur + 0.01);
+        cleanup(osc, [osc, g]);
     }
 
     /** Triangle bass — clean triangle wave for bass lines. */
@@ -236,6 +263,7 @@ Game.Music = (function () {
         g.connect(masterGain);
         osc.start(time);
         osc.stop(time + dur + 0.01);
+        cleanup(osc, [osc, g]);
     }
 
     // ---------------------------------------------------------------
@@ -844,6 +872,7 @@ Game.Music = (function () {
                     g.connect(masterGain);
                     osc.start(t);
                     osc.stop(t + 0.18);
+                    cleanup(osc, [osc, g]);
                 })();
                 break;
 
@@ -864,6 +893,7 @@ Game.Music = (function () {
                         g.connect(masterGain);
                         osc.start(t + offset);
                         osc.stop(t + offset + 0.12);
+                        cleanup(osc, [osc, g]);
                     }
                 })();
                 break;
@@ -886,6 +916,7 @@ Game.Music = (function () {
                     g.connect(masterGain);
                     osc.start(t);
                     osc.stop(t + 0.1);
+                    cleanup(osc, [osc, filt, g]);
 
                     // High-frequency noise burst
                     var buf = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.06, audioCtx.sampleRate);
@@ -904,6 +935,7 @@ Game.Music = (function () {
                     ng.connect(masterGain);
                     n.start(t);
                     n.stop(t + 0.06);
+                    cleanup(n, [n, hpf, ng]);
                 })();
                 break;
 
@@ -921,6 +953,7 @@ Game.Music = (function () {
                     g.connect(masterGain);
                     osc.start(t);
                     osc.stop(t + 0.2);
+                    cleanup(osc, [osc, g]);
 
                     // Crunch noise (bandpass filtered)
                     var buf = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.08, audioCtx.sampleRate);
@@ -940,6 +973,7 @@ Game.Music = (function () {
                     ng.connect(masterGain);
                     n.start(t);
                     n.stop(t + 0.08);
+                    cleanup(n, [n, bp, ng]);
                 })();
                 break;
 
@@ -960,6 +994,7 @@ Game.Music = (function () {
                     g.connect(masterGain);
                     osc.start(t);
                     osc.stop(t + 0.6);
+                    cleanup(osc, [osc, g]);
                 })();
                 break;
 
@@ -982,6 +1017,7 @@ Game.Music = (function () {
                         g.connect(masterGain);
                         osc.start(t + offset);
                         osc.stop(t + offset + 0.35);
+                        cleanup(osc, [osc, g]);
                     }
 
                     // Final sustained C major chord (triangle waves)
@@ -999,6 +1035,7 @@ Game.Music = (function () {
                         g2.connect(masterGain);
                         o2.start(t + 0.6);
                         o2.stop(t + 1.8);
+                        cleanup(o2, [o2, g2]);
                     }
                 })();
                 break;
