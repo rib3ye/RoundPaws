@@ -53,6 +53,7 @@
         grid: [],            // 2D array [row][col] of characters
         width: 0,
         height: 0,
+        comments: [],
         zoom: 24,            // pixels per tile on screen
         scrollX: 0,          // canvas scroll offset in pixels
         scrollY: 0,
@@ -347,6 +348,72 @@
     }
 
     // ---------------------------------------------------------------
+    // Level text format parse/serialize
+    // ---------------------------------------------------------------
+
+    /**
+     * Parse a level .txt file into a grid. Preserves comment lines so
+     * they can round-trip through save. Returns { grid, width, height, comments }.
+     */
+    function parseLevelText(text) {
+        var rawLines = text.split('\n');
+        var comments = [];
+        var gridLines = [];
+
+        for (var i = 0; i < rawLines.length; i++) {
+            var line = rawLines[i];
+            if (line.length === 0) continue;
+            if (line[0] === '#' && line[1] === ' ') {
+                comments.push(line);
+            } else {
+                gridLines.push(line);
+            }
+        }
+
+        var height = gridLines.length;
+        var width = 0;
+        for (var j = 0; j < gridLines.length; j++) {
+            if (gridLines[j].length > width) width = gridLines[j].length;
+        }
+
+        var grid = [];
+        for (var r = 0; r < height; r++) {
+            var row = [];
+            var src = gridLines[r];
+            for (var c = 0; c < width; c++) {
+                row.push(c < src.length ? src[c] : '.');
+            }
+            grid.push(row);
+        }
+
+        return { grid: grid, width: width, height: height, comments: comments };
+    }
+
+    function serializeLevel() {
+        var lines = [];
+        if (state.comments && state.comments.length > 0) {
+            for (var i = 0; i < state.comments.length; i++) lines.push(state.comments[i]);
+        }
+        for (var r = 0; r < state.height; r++) {
+            lines.push(state.grid[r].join(''));
+        }
+        return lines.join('\n') + '\n';
+    }
+
+    function loadLevelText(text, filename) {
+        var parsed = parseLevelText(text);
+        state.grid = parsed.grid;
+        state.width = parsed.width;
+        state.height = parsed.height;
+        state.comments = parsed.comments;
+        state.filename = filename;
+        state.scrollX = 0;
+        state.scrollY = 0;
+        updateStatusBar();
+        redraw();
+    }
+
+    // ---------------------------------------------------------------
     // Mouse interaction
     // ---------------------------------------------------------------
 
@@ -541,4 +608,12 @@
     Game.Sprites.loadImages(function () {
         init();
     });
+
+    // Exposed for manual testing
+    window.__levelEditor = {
+        parse: parseLevelText,
+        serialize: serializeLevel,
+        loadText: loadLevelText,
+        state: state
+    };
 })();
