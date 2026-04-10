@@ -54,6 +54,7 @@
         width: 0,
         height: 0,
         comments: [],
+        showGrid: true,
         zoom: 24,            // pixels per tile on screen
         scrollX: 0,          // canvas scroll offset in pixels
         scrollY: 0,
@@ -292,20 +293,22 @@
         }
 
         // Grid overlay
-        ctx.strokeStyle = 'rgba(0,0,0,0.15)';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        for (var c2 = startCol; c2 <= endCol; c2++) {
-            var x = c2 * z - state.scrollX + 0.5;
-            ctx.moveTo(x, 0);
-            ctx.lineTo(x, h);
+        if (state.showGrid) {
+            ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            for (var c2 = startCol; c2 <= endCol; c2++) {
+                var x = c2 * z - state.scrollX + 0.5;
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, h);
+            }
+            for (var r2 = startRow; r2 <= endRow; r2++) {
+                var y = r2 * z - state.scrollY + 0.5;
+                ctx.moveTo(0, y);
+                ctx.lineTo(w, y);
+            }
+            ctx.stroke();
         }
-        for (var r2 = startRow; r2 <= endRow; r2++) {
-            var y = r2 * z - state.scrollY + 0.5;
-            ctx.moveTo(0, y);
-            ctx.lineTo(w, y);
-        }
-        ctx.stroke();
 
         // Level bounds (red rectangle around the level area)
         ctx.strokeStyle = '#e94560';
@@ -583,6 +586,27 @@
         return true;
     }
 
+    function floodFill(col, row, newCh) {
+        if (col < 0 || col >= state.width || row < 0 || row >= state.height) return;
+        var targetCh = state.grid[row][col];
+        if (targetCh === newCh) return;
+
+        // BFS stack-based flood fill
+        var stack = [[col, row]];
+        while (stack.length > 0) {
+            var pos = stack.pop();
+            var c = pos[0], r = pos[1];
+            if (c < 0 || c >= state.width || r < 0 || r >= state.height) continue;
+            if (state.grid[r][c] !== targetCh) continue;
+            state.grid[r][c] = newCh;
+            stack.push([c + 1, r]);
+            stack.push([c - 1, r]);
+            stack.push([c, r + 1]);
+            stack.push([c, r - 1]);
+        }
+        scheduleAutoSave();
+    }
+
     function handleMouseDown(ev) {
         if (ev.button === 1) {
             // Middle click — pan
@@ -611,6 +635,9 @@
             } else if (state.currentTool === 'erase') {
                 state.isDrawing = 'erase';
                 if (paintAt(pos.col, pos.row, '.')) redraw();
+            } else if (state.currentTool === 'fill') {
+                floodFill(pos.col, pos.row, state.currentTile.ch);
+                redraw();
             }
         }
     }
@@ -704,29 +731,49 @@
 
     var panKeys = {};
     function handleKeyDown(ev) {
-        // Don't steal keys when typing in an input
         if (ev.target.tagName === 'INPUT' || ev.target.tagName === 'SELECT') return;
 
-        var key = ev.key.toLowerCase();
+        var key = ev.key;
+
+        // Tool hotkeys — number keys to avoid conflicts with WASD pan
+        if (key === '1') { state.currentTool = 'draw';   refreshActivePalette(); updateStatusBar(); ev.preventDefault(); return; }
+        if (key === '2') { state.currentTool = 'erase';  refreshActivePalette(); updateStatusBar(); ev.preventDefault(); return; }
+        if (key === '3') { state.currentTool = 'fill';   refreshActivePalette(); updateStatusBar(); ev.preventDefault(); return; }
+        if (key === '4') { state.currentTool = 'select'; refreshActivePalette(); updateStatusBar(); ev.preventDefault(); return; }
+
+        // Tile hotkeys (match TILE_DEFS.key / ENTITY_DEFS.key)
+        var allDefs = TILE_DEFS.concat(ENTITY_DEFS);
+        for (var i = 0; i < allDefs.length; i++) {
+            var def = allDefs[i];
+            // Entity shortcuts require Shift (they are uppercase letters)
+            var matches = (def.key === key);
+            if (matches) {
+                state.currentTile = def;
+                refreshActivePalette();
+                updateStatusBar();
+                ev.preventDefault();
+                return;
+            }
+        }
 
         // Pan keys
-        if (key === 'w' || key === 'arrowup')    { panKeys.up = true;    ev.preventDefault(); }
-        if (key === 's' || key === 'arrowdown')  { panKeys.down = true;  ev.preventDefault(); }
-        if (key === 'a' || key === 'arrowleft')  { panKeys.left = true;  ev.preventDefault(); }
-        if (key === 'd' || key === 'arrowright') { panKeys.right = true; ev.preventDefault(); }
+        var lower = key.toLowerCase();
+        if (lower === 'w' || key === 'ArrowUp')    { panKeys.up = true;    ev.preventDefault(); }
+        if (lower === 's' || key === 'ArrowDown')  { panKeys.down = true;  ev.preventDefault(); }
+        if (lower === 'a' || key === 'ArrowLeft')  { panKeys.left = true;  ev.preventDefault(); }
+        if (lower === 'd' || key === 'ArrowRight') { panKeys.right = true; ev.preventDefault(); }
 
-        // Tool shortcuts
-        if (key === 'd' && !ev.shiftKey && !ev.ctrlKey && !ev.metaKey && !panKeys.right) {
-            // 'd' conflicts with pan. Tool selection is via sidebar click in this build.
-        }
+        // Grid toggle
+        if (lower === 'g') { state.showGrid = !state.showGrid; redraw(); ev.preventDefault(); }
     }
 
     function handleKeyUp(ev) {
-        var key = ev.key.toLowerCase();
-        if (key === 'w' || key === 'arrowup')    panKeys.up = false;
-        if (key === 's' || key === 'arrowdown')  panKeys.down = false;
-        if (key === 'a' || key === 'arrowleft')  panKeys.left = false;
-        if (key === 'd' || key === 'arrowright') panKeys.right = false;
+        var key = ev.key;
+        var lower = key.toLowerCase();
+        if (lower === 'w' || key === 'ArrowUp')    panKeys.up = false;
+        if (lower === 's' || key === 'ArrowDown')  panKeys.down = false;
+        if (lower === 'a' || key === 'ArrowLeft')  panKeys.left = false;
+        if (lower === 'd' || key === 'ArrowRight') panKeys.right = false;
     }
 
     function panStep() {
