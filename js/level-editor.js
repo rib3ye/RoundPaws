@@ -112,11 +112,18 @@
         document.getElementById('btn-save').addEventListener('click', handleSave);
         document.getElementById('btn-new').addEventListener('click', handleNew);
 
-        // Ctrl+S to save
         window.addEventListener('keydown', function (ev) {
-            if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 's') {
+            if (ev.target.tagName === 'INPUT' || ev.target.tagName === 'SELECT') return;
+            var ctrl = ev.ctrlKey || ev.metaKey;
+            if (ctrl && ev.key.toLowerCase() === 's') {
                 ev.preventDefault();
                 handleSave();
+            } else if (ctrl && ev.key.toLowerCase() === 'z' && !ev.shiftKey) {
+                ev.preventDefault();
+                undo();
+            } else if (ctrl && (ev.key.toLowerCase() === 'y' || (ev.key.toLowerCase() === 'z' && ev.shiftKey))) {
+                ev.preventDefault();
+                redo();
             }
         });
 
@@ -607,6 +614,64 @@
         scheduleAutoSave();
     }
 
+    // ---------------------------------------------------------------
+    // Undo / redo
+    // ---------------------------------------------------------------
+
+    var undoStack = [];
+    var redoStack = [];
+    var MAX_UNDO = 50;
+
+    function snapshotGrid() {
+        var copy = [];
+        for (var r = 0; r < state.grid.length; r++) {
+            copy.push(state.grid[r].slice());
+        }
+        return copy;
+    }
+
+    function pushUndo() {
+        undoStack.push({
+            grid: snapshotGrid(),
+            width: state.width,
+            height: state.height
+        });
+        if (undoStack.length > MAX_UNDO) undoStack.shift();
+        redoStack = [];
+    }
+
+    function undo() {
+        if (undoStack.length === 0) { showMessage('Nothing to undo'); return; }
+        redoStack.push({
+            grid: snapshotGrid(),
+            width: state.width,
+            height: state.height
+        });
+        var prev = undoStack.pop();
+        state.grid = prev.grid;
+        state.width = prev.width;
+        state.height = prev.height;
+        updateStatusBar();
+        redraw();
+        showMessage('Undo');
+    }
+
+    function redo() {
+        if (redoStack.length === 0) { showMessage('Nothing to redo'); return; }
+        undoStack.push({
+            grid: snapshotGrid(),
+            width: state.width,
+            height: state.height
+        });
+        var next = redoStack.pop();
+        state.grid = next.grid;
+        state.width = next.width;
+        state.height = next.height;
+        updateStatusBar();
+        redraw();
+        showMessage('Redo');
+    }
+
     function handleMouseDown(ev) {
         if (ev.button === 1) {
             // Middle click — pan
@@ -621,7 +686,7 @@
         state.cursorRow = pos.row;
 
         if (ev.button === 2) {
-            // Right click — erase
+            pushUndo();
             state.isDrawing = 'erase';
             if (paintAt(pos.col, pos.row, '.')) redraw();
             ev.preventDefault();
@@ -630,12 +695,15 @@
 
         if (ev.button === 0) {
             if (state.currentTool === 'draw') {
+                pushUndo();
                 state.isDrawing = 'draw';
                 if (paintAt(pos.col, pos.row, state.currentTile.ch)) redraw();
             } else if (state.currentTool === 'erase') {
+                pushUndo();
                 state.isDrawing = 'erase';
                 if (paintAt(pos.col, pos.row, '.')) redraw();
             } else if (state.currentTool === 'fill') {
+                pushUndo();
                 floodFill(pos.col, pos.row, state.currentTile.ch);
                 redraw();
             }
