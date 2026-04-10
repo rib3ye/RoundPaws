@@ -235,9 +235,82 @@
 
     function redraw() {
         if (!ctx) return;
+
+        var w = canvas.width;
+        var h = canvas.height;
+
+        // Sky background
         ctx.fillStyle = '#87CEEB';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        // Grid rendering is added in the next task.
+        ctx.fillRect(0, 0, w, h);
+
+        var z = state.zoom;
+        var startCol = Math.max(0, Math.floor(state.scrollX / z));
+        var endCol = Math.min(state.width, Math.ceil((state.scrollX + w) / z));
+        var startRow = Math.max(0, Math.floor(state.scrollY / z));
+        var endRow = Math.min(state.height, Math.ceil((state.scrollY + h) / z));
+
+        // Draw tiles
+        for (var r = startRow; r < endRow; r++) {
+            for (var c = startCol; c < endCol; c++) {
+                var ch = state.grid[r][c];
+                var screenX = c * z - state.scrollX;
+                var screenY = r * z - state.scrollY;
+
+                var def = findDef(ch);
+                if (def && def.sprite) {
+                    var spr = Game.Sprites.get(def.sprite, 0);
+                    ctx.drawImage(spr, screenX, screenY, z, z);
+                }
+            }
+        }
+
+        // Grid overlay
+        ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (var c2 = startCol; c2 <= endCol; c2++) {
+            var x = c2 * z - state.scrollX + 0.5;
+            ctx.moveTo(x, 0);
+            ctx.lineTo(x, h);
+        }
+        for (var r2 = startRow; r2 <= endRow; r2++) {
+            var y = r2 * z - state.scrollY + 0.5;
+            ctx.moveTo(0, y);
+            ctx.lineTo(w, y);
+        }
+        ctx.stroke();
+
+        // Level bounds (red rectangle around the level area)
+        ctx.strokeStyle = '#e94560';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(
+            -state.scrollX - 1,
+            -state.scrollY - 1,
+            state.width * z + 2,
+            state.height * z + 2
+        );
+
+        // Cursor highlight
+        if (state.cursorCol >= 0 && state.cursorCol < state.width &&
+            state.cursorRow >= 0 && state.cursorRow < state.height) {
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(
+                state.cursorCol * z - state.scrollX,
+                state.cursorRow * z - state.scrollY,
+                z, z
+            );
+        }
+    }
+
+    function findDef(ch) {
+        for (var i = 0; i < TILE_DEFS.length; i++) {
+            if (TILE_DEFS[i].ch === ch) return TILE_DEFS[i];
+        }
+        for (var j = 0; j < ENTITY_DEFS.length; j++) {
+            if (ENTITY_DEFS[j].ch === ch) return ENTITY_DEFS[j];
+        }
+        return null;
     }
 
     // ---------------------------------------------------------------
