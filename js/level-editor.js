@@ -390,6 +390,50 @@
             ctx.strokeRect(vpX, vpY, vpW, vpH);
             ctx.restore();
         }
+
+        // Scrollbar indicators (bottom and right edges)
+        var contentW = state.width * z;
+        var contentH = state.height * z;
+        var barThickness = 6;
+        var barMargin = 2;
+
+        // Horizontal scrollbar
+        if (contentW > w) {
+            var hTrackX = 0;
+            var hTrackY = h - barThickness - barMargin;
+            var hTrackW = w;
+            ctx.fillStyle = 'rgba(0,0,0,0.25)';
+            ctx.fillRect(hTrackX, hTrackY, hTrackW, barThickness);
+
+            var hRatio = w / contentW;
+            var hThumbW = Math.max(20, hTrackW * hRatio);
+            var hScrollable = contentW - w;
+            var hProgress = hScrollable > 0 ? state.scrollX / hScrollable : 0;
+            if (hProgress < 0) hProgress = 0;
+            if (hProgress > 1) hProgress = 1;
+            var hThumbX = hProgress * (hTrackW - hThumbW);
+            ctx.fillStyle = 'rgba(255,255,255,0.5)';
+            ctx.fillRect(hThumbX, hTrackY, hThumbW, barThickness);
+        }
+
+        // Vertical scrollbar
+        if (contentH > h) {
+            var vTrackX = w - barThickness - barMargin;
+            var vTrackY = 0;
+            var vTrackH = h;
+            ctx.fillStyle = 'rgba(0,0,0,0.25)';
+            ctx.fillRect(vTrackX, vTrackY, barThickness, vTrackH);
+
+            var vRatio = h / contentH;
+            var vThumbH = Math.max(20, vTrackH * vRatio);
+            var vScrollable = contentH - h;
+            var vProgress = vScrollable > 0 ? state.scrollY / vScrollable : 0;
+            if (vProgress < 0) vProgress = 0;
+            if (vProgress > 1) vProgress = 1;
+            var vThumbY = vProgress * (vTrackH - vThumbH);
+            ctx.fillStyle = 'rgba(255,255,255,0.5)';
+            ctx.fillRect(vTrackX, vThumbY, barThickness, vThumbH);
+        }
     }
 
     function findDef(ch) {
