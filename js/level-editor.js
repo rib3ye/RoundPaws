@@ -338,6 +338,22 @@
                 z, z
             );
         }
+
+        // Game viewport overlay (28x14 tiles anchored to player start)
+        var playerPos = findPlayerStart();
+        if (playerPos) {
+            var vpW = 28 * z;
+            var vpH = 14 * z;
+            // Anchor the viewport so the player is roughly centered
+            var vpX = (playerPos.col * z) - vpW / 2 + z / 2 - state.scrollX;
+            var vpY = (playerPos.row * z) - vpH / 2 + z / 2 - state.scrollY;
+            ctx.save();
+            ctx.strokeStyle = 'rgba(255,255,0,0.7)';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([6, 4]);
+            ctx.strokeRect(vpX, vpY, vpW, vpH);
+            ctx.restore();
+        }
     }
 
     function findDef(ch) {
@@ -346,6 +362,15 @@
         }
         for (var j = 0; j < ENTITY_DEFS.length; j++) {
             if (ENTITY_DEFS[j].ch === ch) return ENTITY_DEFS[j];
+        }
+        return null;
+    }
+
+    function findPlayerStart() {
+        for (var r = 0; r < state.height; r++) {
+            for (var c = 0; c < state.width; c++) {
+                if (state.grid[r][c] === 'P') return { col: c, row: r };
+            }
         }
         return null;
     }
