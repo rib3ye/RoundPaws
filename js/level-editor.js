@@ -154,11 +154,49 @@
             }
         });
 
-        refreshLevelDropdown();
+        // Auto-load level1.txt on startup so the editor opens on a real
+        // level instead of a blank canvas. Prefers a saved draft if one
+        // exists (so reopening the editor picks up where you left off),
+        // falling back to disk, then to the blank placeholder.
+        refreshLevelDropdown().then(function () {
+            autoLoadInitialLevel('level1.txt');
+        });
 
         syncMetaInputsFromState();
         redraw();
         updateStatusBar();
+    }
+
+    function autoLoadInitialLevel(filename) {
+        var draftKey = 'level-editor:' + filename;
+        var draft = null;
+        try { draft = localStorage.getItem(draftKey); } catch (e) { /* ignore */ }
+
+        function afterLoad(from) {
+            var select = document.getElementById('level-file');
+            if (select) {
+                for (var i = 0; i < select.options.length; i++) {
+                    if (select.options[i].value === filename) {
+                        select.selectedIndex = i;
+                        break;
+                    }
+                }
+            }
+            showMessage('Loaded ' + filename + ' (' + from + ')');
+        }
+
+        if (draft) {
+            loadLevelText(draft, filename);
+            afterLoad('draft');
+            return;
+        }
+
+        fetchLevel(filename).then(function (text) {
+            loadLevelText(text, filename);
+            afterLoad('disk');
+        }).catch(function () {
+            // Level1 not available — stay on the blank placeholder
+        });
     }
 
     // ---------------------------------------------------------------
