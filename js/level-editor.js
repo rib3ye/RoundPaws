@@ -63,7 +63,10 @@
         isDrawing: false,
         isPanning: false,
         panStart: null,
-        panScroll: null
+        panScroll: null,
+        selection: null,      // { col1, row1, col2, row2 } in grid coords, null when inactive
+        clipboard: null,      // { width, height, cells: string[][] }
+        selectAnchor: null    // starting corner during a drag
     };
 
     // DOM
@@ -124,16 +127,18 @@
         window.addEventListener('keydown', function (ev) {
             if (ev.target.tagName === 'INPUT' || ev.target.tagName === 'SELECT') return;
             var ctrl = ev.ctrlKey || ev.metaKey;
-            if (ctrl && ev.key.toLowerCase() === 's') {
+            var k = ev.key.toLowerCase();
+            if (ctrl && k === 's') { ev.preventDefault(); handleSave(); }
+            else if (ctrl && k === 'z' && !ev.shiftKey) { ev.preventDefault(); undo(); }
+            else if (ctrl && (k === 'y' || (k === 'z' && ev.shiftKey))) { ev.preventDefault(); redo(); }
+            else if (ctrl && k === 'c') { ev.preventDefault(); copySelection(); }
+            else if (ctrl && k === 'x') { ev.preventDefault(); cutSelection(); }
+            else if (ctrl && k === 'v') { ev.preventDefault(); pasteClipboard(); }
+            else if ((ev.key === 'Delete' || ev.key === 'Backspace') && state.selection) {
                 ev.preventDefault();
-                handleSave();
-            } else if (ctrl && ev.key.toLowerCase() === 'z' && !ev.shiftKey) {
-                ev.preventDefault();
-                undo();
-            } else if (ctrl && (ev.key.toLowerCase() === 'y' || (ev.key.toLowerCase() === 'z' && ev.shiftKey))) {
-                ev.preventDefault();
-                redo();
+                deleteSelection();
             }
+            else if (ev.key === 'Escape') { state.selection = null; redraw(); }
         });
 
         refreshLevelDropdown();
@@ -348,6 +353,23 @@
             );
         }
 
+        // Selection rectangle
+        if (state.selection) {
+            var sel = normalizeSelection(state.selection);
+            var sx = sel.col1 * z - state.scrollX;
+            var sy = sel.row1 * z - state.scrollY;
+            var sw = (sel.col2 - sel.col1 + 1) * z;
+            var sh = (sel.row2 - sel.row1 + 1) * z;
+            ctx.save();
+            ctx.strokeStyle = '#4af';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([4, 4]);
+            ctx.strokeRect(sx, sy, sw, sh);
+            ctx.fillStyle = 'rgba(68, 170, 255, 0.1)';
+            ctx.fillRect(sx, sy, sw, sh);
+            ctx.restore();
+        }
+
         // Game viewport overlay (28x14 tiles anchored to player start)
         var playerPos = findPlayerStart();
         if (playerPos) {
@@ -382,6 +404,15 @@
             }
         }
         return null;
+    }
+
+    function normalizeSelection(sel) {
+        return {
+            col1: Math.min(sel.col1, sel.col2),
+            row1: Math.min(sel.row1, sel.row2),
+            col2: Math.max(sel.col1, sel.col2),
+            row2: Math.max(sel.row1, sel.row2)
+        };
     }
 
     // ---------------------------------------------------------------
@@ -790,6 +821,85 @@
         showMessage('Redo');
     }
 
+    // ---------------------------------------------------------------
+    // Clipboard operations
+    // ---------------------------------------------------------------
+
+    function copySelection() {
+        if (!state.selection) return;
+        var sel = normalizeSelection(state.selection);
+        var cells = [];
+        for (var r = sel.row1; r <= sel.row2; r++) {
+            var row = [];
+            for (var c = sel.col1; c <= sel.col2; c++) {
+                if (r >= 0 && r < state.height && c >= 0 && c < state.width) {
+                    row.push(state.grid[r][c]);
+                } else {
+                    row.push('.');
+                }
+            }
+            cells.push(row);
+        }
+        state.clipboard = {
+            width: sel.col2 - sel.col1 + 1,
+            height: sel.row2 - sel.row1 + 1,
+            cells: cells
+        };
+        showMessage('Copied ' + state.clipboard.width + 'x' + state.clipboard.height);
+    }
+
+    function cutSelection() {
+        if (!state.selection) return;
+        copySelection();
+        pushUndo();
+        var sel = normalizeSelection(state.selection);
+        for (var r = sel.row1; r <= sel.row2; r++) {
+            for (var c = sel.col1; c <= sel.col2; c++) {
+                if (r >= 0 && r < state.height && c >= 0 && c < state.width) {
+                    state.grid[r][c] = '.';
+                }
+            }
+        }
+        scheduleAutoSave();
+        redraw();
+        showMessage('Cut');
+    }
+
+    function deleteSelection() {
+        if (!state.selection) return;
+        pushUndo();
+        var sel = normalizeSelection(state.selection);
+        for (var r = sel.row1; r <= sel.row2; r++) {
+            for (var c = sel.col1; c <= sel.col2; c++) {
+                if (r >= 0 && r < state.height && c >= 0 && c < state.width) {
+                    state.grid[r][c] = '.';
+                }
+            }
+        }
+        scheduleAutoSave();
+        redraw();
+        showMessage('Deleted');
+    }
+
+    function pasteClipboard() {
+        if (!state.clipboard) { showMessage('Clipboard empty'); return; }
+        if (state.cursorCol < 0) { showMessage('Hover over the canvas first'); return; }
+        pushUndo();
+        var cb = state.clipboard;
+        for (var r = 0; r < cb.height; r++) {
+            for (var c = 0; c < cb.width; c++) {
+                var tr = state.cursorRow + r;
+                var tc = state.cursorCol + c;
+                if (tr >= 0 && tr < state.height && tc >= 0 && tc < state.width) {
+                    state.grid[tr][tc] = cb.cells[r][c];
+                }
+            }
+        }
+        scheduleAutoSave();
+        redraw();
+        showMessage('Pasted at ' + state.cursorCol + ',' + state.cursorRow);
+    }
+
     function handleMouseDown(ev) {
         if (ev.button === 1) {
             // Middle click — pan
@@ -824,6 +934,11 @@
                 pushUndo();
                 floodFill(pos.col, pos.row, state.currentTile.ch);
                 redraw();
+            } else if (state.currentTool === 'select') {
+                state.selectAnchor = { col: pos.col, row: pos.row };
+                state.selection = { col1: pos.col, row1: pos.row, col2: pos.col, row2: pos.row };
+                state.isDrawing = 'select';
+                redraw();
             }
         }
     }
@@ -844,7 +959,11 @@
             state.cursorCol = pos.col;
             state.cursorRow = pos.row;
             updateStatusBar();
-            if (state.isDrawing === 'draw') {
+            if (state.isDrawing === 'select') {
+                state.selection.col2 = pos.col;
+                state.selection.row2 = pos.row;
+                redraw();
+            } else if (state.isDrawing === 'draw') {
                 if (paintAt(pos.col, pos.row, state.currentTile.ch)) redraw();
                 else redraw(); // still redraw for cursor update
             } else if (state.isDrawing === 'erase') {
