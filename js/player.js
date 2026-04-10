@@ -18,13 +18,13 @@ Game.Player = (function() {
   // ---------------------------------------------------------------
   var TILE = 16;
 
-  var GRAVITY = 0.09;
-  var MAX_FALL = 2.0;
-  var MOVE_SPEED = 2.0;
+  var GRAVITY = 0.25;
+  var MAX_FALL = 4.0;
+  var MOVE_SPEED = 2.6;
   var FRICTION = 0.75;
   var AIR_CONTROL = 0.85; // multiplier for air acceleration
 
-  var JUMP_FORCE = -2.5;       // initial upward velocity
+  var JUMP_FORCE = -5.2;       // initial upward velocity
   var JUMP_HOLD_FORCE = -0.07; // extra lift while holding jump
   var JUMP_HOLD_FRAMES = 14;   // max frames you can hold jump for extra height
 
