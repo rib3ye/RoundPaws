@@ -138,7 +138,12 @@
                 ev.preventDefault();
                 deleteSelection();
             }
-            else if (ev.key === 'Escape') { state.selection = null; redraw(); }
+            else if (ev.key === 'Escape') {
+                state.selection = null;
+                state.selectAnchor = null;
+                state.isDrawing = false;
+                redraw();
+            }
         });
 
         refreshLevelDropdown();
