@@ -94,6 +94,13 @@
 
         resizeCanvas();
         window.addEventListener('resize', resizeCanvas);
+
+        canvas.addEventListener('mousedown', handleMouseDown);
+        canvas.addEventListener('mousemove', handleMouseMove);
+        canvas.addEventListener('mouseup', handleMouseUp);
+        canvas.addEventListener('mouseleave', handleMouseLeave);
+        canvas.addEventListener('contextmenu', function (ev) { ev.preventDefault(); });
+
         redraw();
         updateStatusBar();
     }
@@ -332,6 +339,123 @@
         setTimeout(function () {
             if (statusMsg.textContent === text) statusMsg.textContent = '';
         }, 3000);
+    }
+
+    // ---------------------------------------------------------------
+    // Mouse interaction
+    // ---------------------------------------------------------------
+
+    function screenToGrid(ev) {
+        var rect = canvas.getBoundingClientRect();
+        var x = ev.clientX - rect.left + state.scrollX;
+        var y = ev.clientY - rect.top + state.scrollY;
+        return {
+            col: Math.floor(x / state.zoom),
+            row: Math.floor(y / state.zoom)
+        };
+    }
+
+    function paintAt(col, row, ch) {
+        if (col < 0 || col >= state.width || row < 0 || row >= state.height) return false;
+        if (state.grid[row][col] === ch) return false;
+
+        // Unique entities (P, F) — remove any existing instance first
+        if (ch === 'P' || ch === 'F') {
+            for (var r = 0; r < state.height; r++) {
+                for (var c = 0; c < state.width; c++) {
+                    if (state.grid[r][c] === ch) state.grid[r][c] = '.';
+                }
+            }
+        }
+
+        state.grid[row][col] = ch;
+        return true;
+    }
+
+    function handleMouseDown(ev) {
+        if (ev.button === 1) {
+            // Middle click — pan
+            ev.preventDefault();
+            state.isPanning = true;
+            state.panStart = { x: ev.clientX, y: ev.clientY };
+            state.panScroll = { x: state.scrollX, y: state.scrollY };
+            return;
+        }
+        var pos = screenToGrid(ev);
+        state.cursorCol = pos.col;
+        state.cursorRow = pos.row;
+
+        if (ev.button === 2) {
+            // Right click — erase
+            state.isDrawing = 'erase';
+            if (paintAt(pos.col, pos.row, '.')) redraw();
+            ev.preventDefault();
+            return;
+        }
+
+        if (ev.button === 0) {
+            if (state.currentTool === 'draw') {
+                state.isDrawing = 'draw';
+                if (paintAt(pos.col, pos.row, state.currentTile.ch)) redraw();
+            } else if (state.currentTool === 'erase') {
+                state.isDrawing = 'erase';
+                if (paintAt(pos.col, pos.row, '.')) redraw();
+            }
+        }
+    }
+
+    function handleMouseMove(ev) {
+        if (state.isPanning) {
+            var dx = ev.clientX - state.panStart.x;
+            var dy = ev.clientY - state.panStart.y;
+            state.scrollX = state.panScroll.x - dx;
+            state.scrollY = state.panScroll.y - dy;
+            clampScroll();
+            redraw();
+            return;
+        }
+
+        var pos = screenToGrid(ev);
+        if (pos.col !== state.cursorCol || pos.row !== state.cursorRow) {
+            state.cursorCol = pos.col;
+            state.cursorRow = pos.row;
+            updateStatusBar();
+            if (state.isDrawing === 'draw') {
+                if (paintAt(pos.col, pos.row, state.currentTile.ch)) redraw();
+                else redraw(); // still redraw for cursor update
+            } else if (state.isDrawing === 'erase') {
+                if (paintAt(pos.col, pos.row, '.')) redraw();
+                else redraw();
+            } else {
+                redraw();
+            }
+        }
+    }
+
+    function handleMouseUp(ev) {
+        state.isDrawing = false;
+        state.isPanning = false;
+    }
+
+    function handleMouseLeave() {
+        state.cursorCol = -1;
+        state.cursorRow = -1;
+        updateStatusBar();
+        redraw();
+    }
+
+    function clampScroll() {
+        var contentW = state.width * state.zoom;
+        var contentH = state.height * state.zoom;
+        var pad = 80;
+        var minX = -pad;
+        var minY = -pad;
+        var maxX = Math.max(minX, contentW - canvas.width + pad);
+        var maxY = Math.max(minY, contentH - canvas.height + pad);
+        if (state.scrollX < minX) state.scrollX = minX;
+        if (state.scrollX > maxX) state.scrollX = maxX;
+        if (state.scrollY < minY) state.scrollY = minY;
+        if (state.scrollY > maxY) state.scrollY = maxY;
     }
 
     // Kick off after sprites are loaded
