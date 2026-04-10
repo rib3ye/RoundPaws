@@ -239,7 +239,10 @@ window.Game = window.Game || {};
                 }
 
                 // Scroll camera to follow player
-                Game.Renderer.updateCamera(px + pw / 2, currentLevel.width);
+                Game.Renderer.updateCamera(
+                    px + pw / 2, currentLevel.width,
+                    py + ph / 2, currentLevel.height
+                );
 
                 // Check for level completion (player reached the flag)
                 if (playerResult === 'level_complete') {

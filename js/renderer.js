@@ -12,7 +12,7 @@ window.Game = window.Game || {};
 Game.Renderer = (function () {
     var canvas, ctx;
     var TILE = 16;
-    var camera = { x: 0 };
+    var camera = { x: 0, y: 0 };
     var canvasW, canvasH;
 
     // ---------------------------------------------------------------
@@ -39,17 +39,29 @@ Game.Renderer = (function () {
     // ---------------------------------------------------------------
 
     /** Smoothly scroll toward the player. Clamped to level bounds. */
-    function updateCamera(playerX, levelWidth) {
-        var target = playerX - canvasW / 2;
-        camera.x += (target - camera.x) * 0.1; // lerp for smooth follow
-
+    function updateCamera(playerX, levelWidth, playerY, levelHeight) {
+        var targetX = playerX - canvasW / 2;
+        camera.x += (targetX - camera.x) * 0.1;
         var maxX = levelWidth * TILE - canvasW;
         if (camera.x < 0) camera.x = 0;
         if (camera.x > maxX) camera.x = maxX;
+
+        // Vertical tracking only kicks in if the level is taller than the viewport
+        if (typeof playerY === 'number' && typeof levelHeight === 'number' &&
+            levelHeight * TILE > canvasH) {
+            var targetY = playerY - canvasH / 2;
+            camera.y += (targetY - camera.y) * 0.1;
+            var maxY = levelHeight * TILE - canvasH;
+            if (camera.y < 0) camera.y = 0;
+            if (camera.y > maxY) camera.y = maxY;
+        } else {
+            camera.y = 0;
+        }
     }
 
     function resetCamera() {
         camera.x = 0;
+        camera.y = 0;
     }
 
     // ---------------------------------------------------------------
@@ -62,11 +74,16 @@ Game.Renderer = (function () {
         var endCol = startCol + Math.ceil(canvasW / TILE) + 1;
         if (endCol > level.width) endCol = level.width;
 
-        for (var row = 0; row < level.height; row++) {
+        var startRow = Math.floor(camera.y / TILE);
+        var endRow = startRow + Math.ceil(canvasH / TILE) + 1;
+        if (endRow > level.height) endRow = level.height;
+        if (startRow < 0) startRow = 0;
+
+        for (var row = startRow; row < endRow; row++) {
             for (var col = startCol; col < endCol; col++) {
                 var tile = level.grid[row][col];
                 var screenX = col * TILE - camera.x;
-                var screenY = row * TILE;
+                var screenY = row * TILE - camera.y;
                 var sprite = null;
 
                 switch (tile) {
@@ -92,7 +109,7 @@ Game.Renderer = (function () {
     /** Draw a sprite in world space (offset by camera). */
     function drawSprite(spriteName, x, y, frame) {
         var sprite = Game.Sprites.get(spriteName, frame);
-        ctx.drawImage(sprite, Math.round(x - camera.x), Math.round(y));
+        ctx.drawImage(sprite, Math.round(x - camera.x), Math.round(y - camera.y));
     }
 
     /** Draw a sprite in screen space (ignores camera). Used for HUD / title. */
@@ -139,6 +156,7 @@ Game.Renderer = (function () {
     function getHeight()  { return canvasH; }
     function getCtx()     { return ctx; }
     function getCameraX() { return camera.x; }
+    function getCameraY() { return camera.y; }
 
     return {
         init: init,
@@ -155,6 +173,7 @@ Game.Renderer = (function () {
         getWidth: getWidth,
         getHeight: getHeight,
         getCtx: getCtx,
-        getCameraX: getCameraX
+        getCameraX: getCameraX,
+        getCameraY: getCameraY
     };
 })();
