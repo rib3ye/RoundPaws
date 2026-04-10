@@ -206,6 +206,29 @@
         startAnimPreview();
         undoStack = [];
         redoStack = [];
+        snapshotAllFramesOnDisk();
+    }
+
+    // Ask the server to back up every frame on disk for this sprite so the
+    // baseline the kid sees when they open the sprite is always recoverable
+    // from .tile-backups/, even if they never explicitly save.
+    var snapshottedInSession = {};
+    function snapshotAllFramesOnDisk() {
+        if (!isLocalhost() || !currentSprite) return;
+        var name = currentSprite.name;
+        var frames = currentSprite.frames;
+        for (var f = 0; f < frames; f++) {
+            var filename = getFilename(name, f, frames);
+            if (snapshottedInSession[filename]) continue;
+            snapshottedInSession[filename] = true;
+            (function (fn) {
+                var xhr = new XMLHttpRequest();
+                xhr.open('POST', '/api/snapshot-tile');
+                xhr.setRequestHeader('Content-Type', 'application/json');
+                xhr.send(JSON.stringify({ filename: fn }));
+                // Fire and forget — a snapshot failure must not disrupt editing
+            })(filename);
+        }
     }
 
     function makeEmptyPixels(w, h) {
@@ -937,7 +960,7 @@
         xhr.onload = function () {
             if (xhr.status === 200) {
                 localApiAvailable = true;
-                showSaveStatus('Local mode — saves to tiles/ directly', '#88ccff');
+                showSaveStatus('Local mode — previous versions auto-backed up to .tile-backups/', '#88ccff');
             } else {
                 localApiAvailable = false;
                 showSaveStatus('Run "node server.js" to enable local save', '#ff8844');
@@ -1092,7 +1115,7 @@
                 if (err) {
                     showSaveStatus('Error: ' + err, '#ff4444');
                 } else {
-                    showSaveStatus('Saved to tiles/' + filename + '!', '#44ff44');
+                    showSaveStatus('Saved ' + filename + ' (previous version backed up)', '#44ff44');
                 }
             });
         } else {

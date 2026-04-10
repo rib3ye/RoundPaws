@@ -22,9 +22,62 @@ var ROOT = __dirname;
 var CERT_DIR = path.join(ROOT, '.cert');
 var KEY_PATH = path.join(CERT_DIR, 'localhost.key');
 var CERT_PATH = path.join(CERT_DIR, 'localhost.crt');
+var BACKUP_DIR = path.join(ROOT, '.tile-backups');
+var MAX_BACKUPS_PER_TILE = 30;
 
 // Incremented every time a tile changes — game polls this to detect changes
 var tileVersion = 0;
+
+// ---------------------------------------------------------------
+// Tile backup safety net
+// ---------------------------------------------------------------
+// Every time a tile is about to be overwritten, the current contents
+// are copied to .tile-backups/<name>-<timestamp>.png. The very first
+// backup per tile is also saved as <name>-original.png and never
+// deleted — this is the "pristine" version a kid can always return to.
+// Timestamped backups are rotated: only the most recent
+// MAX_BACKUPS_PER_TILE are kept per tile.
+
+function backupTile(filename) {
+    try {
+        var src = path.join(ROOT, 'tiles', filename);
+        if (!fs.existsSync(src)) return; // nothing to back up yet
+
+        if (!fs.existsSync(BACKUP_DIR)) {
+            fs.mkdirSync(BACKUP_DIR);
+        }
+
+        var base = filename.replace(/\.png$/i, '');
+
+        // Preserve the very first version forever as <base>-original.png
+        var originalPath = path.join(BACKUP_DIR, base + '-original.png');
+        if (!fs.existsSync(originalPath)) {
+            fs.copyFileSync(src, originalPath);
+        }
+
+        // Timestamped rolling backup (ISO-ish, filesystem-safe)
+        var ts = new Date().toISOString().replace(/[:.]/g, '-');
+        var rollingPath = path.join(BACKUP_DIR, base + '-' + ts + '.png');
+        fs.copyFileSync(src, rollingPath);
+
+        // Rotate: keep only the MAX_BACKUPS_PER_TILE newest timestamped
+        // backups for this tile. The -original file is exempt.
+        var prefix = base + '-';
+        var entries = fs.readdirSync(BACKUP_DIR).filter(function (f) {
+            return f.indexOf(prefix) === 0
+                && f !== base + '-original.png'
+                && f.endsWith('.png');
+        }).sort(); // ISO timestamps sort lexicographically
+
+        while (entries.length > MAX_BACKUPS_PER_TILE) {
+            var oldest = entries.shift();
+            try { fs.unlinkSync(path.join(BACKUP_DIR, oldest)); } catch (e) { /* best effort */ }
+        }
+    } catch (e) {
+        console.error('backupTile failed for ' + filename + ':', e.message);
+        // Never throw — a failed backup should not block a save
+    }
+}
 
 var MIME = {
     '.html': 'text/html',
@@ -90,11 +143,38 @@ function handleRequest(req, res) {
                 }
                 var filePath = path.join(ROOT, 'tiles', filename);
                 var data = Buffer.from(json.data, 'base64');
+                backupTile(filename); // snapshot existing copy before we overwrite it
                 fs.writeFileSync(filePath, data);
                 tileVersion++;
-                console.log('Saved tiles/' + filename + ' (v' + tileVersion + ')');
+                console.log('Saved tiles/' + filename + ' (v' + tileVersion + ', previous version backed up)');
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ ok: true, version: tileVersion }));
+            } catch (e) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: e.message }));
+            }
+        });
+        return;
+    }
+
+    // API: snapshot a tile's current disk state (no write).
+    // Called when the editor loads a sprite, so the starting state
+    // is preserved even if the user never saves.
+    if (req.method === 'POST' && req.url === '/api/snapshot-tile') {
+        var sbody = [];
+        req.on('data', function (chunk) { sbody.push(chunk); });
+        req.on('end', function () {
+            try {
+                var sjson = JSON.parse(Buffer.concat(sbody).toString());
+                var sfilename = path.basename(sjson.filename || '');
+                if (!sfilename.endsWith('.png')) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: 'Filename must end in .png' }));
+                    return;
+                }
+                backupTile(sfilename);
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ ok: true }));
             } catch (e) {
                 res.writeHead(500, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ error: e.message }));
