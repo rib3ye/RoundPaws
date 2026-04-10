@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Round Paws - Level Editor</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; overflow: hidden; background: #1a1a2e; color: #eee; font-family: monospace; }
+
+.app { display: flex; flex-direction: column; height: 100%; }
+.workspace { display: flex; flex: 1; min-height: 0; }
+
+/* Left sidebar */
+.sidebar {
+  width: 200px; min-width: 200px;
+  background: #16213e; border-right: 2px solid #0f3460;
+  overflow-y: auto;
+  padding: 8px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.sidebar h2 { font-size: 12px; color: #e94560; margin: 4px 0; }
+.tile-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+.tile-btn {
+  aspect-ratio: 1;
+  background: #1a1a3e; border: 2px solid #333; border-radius: 4px;
+  color: #ddd; font-family: monospace; font-size: 10px;
+  cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 2px;
+  position: relative;
+}
+.tile-btn:hover { border-color: #666; }
+.tile-btn.active { border-color: #e94560; background: #2a1a3e; }
+.tile-btn canvas { image-rendering: pixelated; }
+.tile-btn .ch { position: absolute; top: 1px; right: 2px; font-size: 8px; color: #888; }
+.tile-btn .lbl { font-size: 8px; color: #aaa; margin-top: 2px; text-align: center; }
+
+.tool-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; }
+.tool-btn {
+  background: #1a1a3e; border: 2px solid #333; border-radius: 4px;
+  color: #ddd; font-family: monospace; font-size: 11px;
+  padding: 8px 4px; cursor: pointer; text-align: center;
+}
+.tool-btn:hover { border-color: #666; }
+.tool-btn.active { border-color: #e94560; background: #2a1a3e; color: #fff; }
+.tool-btn .key { display: block; font-size: 9px; color: #888; margin-top: 2px; }
+
+.level-controls button, .level-controls select {
+  width: 100%; padding: 6px; margin-top: 4px;
+  background: #1a1a3e; border: 1px solid #444; border-radius: 4px;
+  color: #fff; font-family: monospace; font-size: 11px;
+  cursor: pointer;
+}
+.level-controls button.primary { background: #e94560; border-color: #e94560; font-weight: bold; }
+.level-controls button.primary:hover { background: #c73650; }
+.level-controls button:hover { border-color: #666; }
+.level-controls label { font-size: 10px; color: #888; display: block; margin-top: 4px; }
+
+/* Main canvas area */
+.main {
+  flex: 1; position: relative;
+  background: #0a0a1a;
+  overflow: hidden;
+}
+#editor-canvas {
+  image-rendering: pixelated;
+  cursor: crosshair;
+  display: block;
+  position: absolute; top: 0; left: 0;
+}
+
+/* Bottom status bar */
+.statusbar {
+  height: 28px;
+  background: #16213e; border-top: 2px solid #0f3460;
+  display: flex; align-items: center; padding: 0 12px; gap: 16px;
+  font-size: 11px; color: #aaa;
+}
+.statusbar .spacer { flex: 1; }
+.statusbar .status-item { color: #ddd; }
+.statusbar .status-label { color: #888; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="workspace">
+    <div class="sidebar">
+      <div>
+        <h2>TILES</h2>
+        <div class="tile-grid" id="tile-palette"></div>
+      </div>
+      <div>
+        <h2>ENTITIES</h2>
+        <div class="tile-grid" id="entity-palette"></div>
+      </div>
+      <div>
+        <h2>TOOLS</h2>
+        <div class="tool-row" id="tool-palette"></div>
+      </div>
+      <div class="level-controls">
+        <h2>LEVEL</h2>
+        <label>File</label>
+        <select id="level-file"></select>
+        <button id="btn-load">Load</button>
+        <button id="btn-new">New Level</button>
+        <button id="btn-save" class="primary">Save to Game (Ctrl+S)</button>
+      </div>
+    </div>
+    <div class="main" id="main-area">
+      <canvas id="editor-canvas"></canvas>
+    </div>
+  </div>
+  <div class="statusbar">
+    <span class="status-item"><span class="status-label">Pos:</span> <span id="status-pos">-,-</span></span>
+    <span class="status-item"><span class="status-label">Size:</span> <span id="status-size">-x-</span></span>
+    <span class="status-item"><span class="status-label">Tool:</span> <span id="status-tool">draw</span></span>
+    <span class="status-item"><span class="status-label">Tile:</span> <span id="status-tile">.</span></span>
+    <span class="spacer"></span>
+    <span class="status-item" id="status-msg"></span>
+    <span class="status-item"><span class="status-label">Zoom:</span> <span id="status-zoom">24px</span></span>
+  </div>
+</div>
+<script src="js/sprites.js"></script>
+<script src="js/level-editor.js"></script>
+</body>
+</html>
