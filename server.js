@@ -134,6 +134,22 @@ function handleRequest(req, res) {
         return;
     }
 
+    // API: list level files
+    if (req.method === 'GET' && req.url === '/api/list-levels') {
+        try {
+            var levelsDir = path.join(ROOT, 'levels');
+            var files = fs.readdirSync(levelsDir).filter(function (f) {
+                return /^level[a-zA-Z0-9_-]+\.txt$/.test(f);
+            }).sort();
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(files));
+        } catch (e) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: e.message }));
+        }
+        return;
+    }
+
     // API: tile version (polled by game for live reload)
     if (req.method === 'GET' && req.url === '/api/tile-version') {
         res.writeHead(200, {
