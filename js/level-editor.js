@@ -107,6 +107,20 @@
         window.addEventListener('keyup', handleKeyUp);
         requestAnimationFrame(panStep);
 
+        document.getElementById('btn-load').addEventListener('click', handleLoad);
+        document.getElementById('btn-save').addEventListener('click', handleSave);
+        document.getElementById('btn-new').addEventListener('click', handleNew);
+
+        // Ctrl+S to save
+        window.addEventListener('keydown', function (ev) {
+            if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 's') {
+                ev.preventDefault();
+                handleSave();
+            }
+        });
+
+        refreshLevelDropdown();
+
         redraw();
         updateStatusBar();
     }
@@ -414,6 +428,130 @@
     }
 
     // ---------------------------------------------------------------
+    // File operations (API calls)
+    // ---------------------------------------------------------------
+
+    function fetchLevelList() {
+        return fetch('/api/list-levels')
+            .then(function (r) { return r.json(); });
+    }
+
+    function fetchLevel(filename) {
+        return fetch('/api/load-level?file=' + encodeURIComponent(filename))
+            .then(function (r) {
+                if (!r.ok) throw new Error('Failed to load ' + filename);
+                return r.text();
+            });
+    }
+
+    function saveLevelToServer(filename, data) {
+        return fetch('/api/save-level', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filename: filename, data: data })
+        }).then(function (r) { return r.json(); });
+    }
+
+    function refreshLevelDropdown() {
+        var select = document.getElementById('level-file');
+        return fetchLevelList().then(function (files) {
+            select.innerHTML = '';
+            files.forEach(function (f) {
+                var opt = document.createElement('option');
+                opt.value = f;
+                opt.textContent = f;
+                if (f === state.filename) opt.selected = true;
+                select.appendChild(opt);
+            });
+        });
+    }
+
+    function handleLoad() {
+        var select = document.getElementById('level-file');
+        var filename = select.value;
+        if (!filename) return;
+
+        // Check for localStorage draft
+        var draftKey = 'level-editor:' + filename;
+        var draft = localStorage.getItem(draftKey);
+        if (draft) {
+            if (confirm('There is an unsaved draft for ' + filename + '. Restore it?')) {
+                loadLevelText(draft, filename);
+                showMessage('Draft restored');
+                return;
+            }
+        }
+
+        fetchLevel(filename).then(function (text) {
+            loadLevelText(text, filename);
+            showMessage('Loaded ' + filename);
+        }).catch(function (e) {
+            showMessage('Load failed: ' + e.message);
+        });
+    }
+
+    function handleSave() {
+        var filename = state.filename;
+        if (!filename || filename === 'untitled.txt') {
+            filename = prompt('Save as (e.g., level4.txt):', 'level4.txt');
+            if (!filename) return;
+            if (!/^level[a-zA-Z0-9_-]+\.txt$/.test(filename)) {
+                showMessage('Invalid filename — must match levelN.txt');
+                return;
+            }
+            state.filename = filename;
+        }
+
+        var data = serializeLevel();
+        saveLevelToServer(filename, data).then(function (result) {
+            if (result.ok) {
+                showMessage('Saved ' + filename);
+                // Clear the localStorage draft since disk is now authoritative
+                localStorage.removeItem('level-editor:' + filename);
+                refreshLevelDropdown();
+            } else {
+                showMessage('Save failed: ' + (result.error || 'unknown'));
+            }
+        }).catch(function (e) {
+            showMessage('Save failed: ' + e.message);
+        });
+    }
+
+    function handleNew() {
+        var w = parseInt(prompt('Level width (in tiles):', '60'), 10);
+        if (!w || w < 4) return;
+        var h = parseInt(prompt('Level height (in tiles):', '14'), 10);
+        if (!h || h < 4) return;
+        var fn = prompt('Filename (e.g., level4.txt):', 'level4.txt');
+        if (!fn) return;
+        if (!/^level[a-zA-Z0-9_-]+\.txt$/.test(fn)) {
+            showMessage('Invalid filename — must match levelN.txt');
+            return;
+        }
+        newBlankLevel(w, h, fn);
+        state.comments = ['# ' + fn.replace('.txt', '')];
+        updateStatusBar();
+        redraw();
+        showMessage('New level created');
+    }
+
+    // ---------------------------------------------------------------
+    // Auto-save to localStorage
+    // ---------------------------------------------------------------
+
+    var autoSaveTimer = null;
+    function scheduleAutoSave() {
+        if (autoSaveTimer) clearTimeout(autoSaveTimer);
+        autoSaveTimer = setTimeout(function () {
+            if (state.filename && state.filename !== 'untitled.txt') {
+                try {
+                    localStorage.setItem('level-editor:' + state.filename, serializeLevel());
+                } catch (e) { /* quota exceeded — ignore */ }
+            }
+        }, 500);
+    }
+
+    // ---------------------------------------------------------------
     // Mouse interaction
     // ---------------------------------------------------------------
 
@@ -441,6 +579,7 @@
         }
 
         state.grid[row][col] = ch;
+        scheduleAutoSave();
         return true;
     }
 
