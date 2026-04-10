@@ -112,6 +112,15 @@
         document.getElementById('btn-save').addEventListener('click', handleSave);
         document.getElementById('btn-new').addEventListener('click', handleNew);
 
+        document.getElementById('btn-grow-right').addEventListener('click', growRight);
+        document.getElementById('btn-shrink-right').addEventListener('click', shrinkRight);
+        document.getElementById('btn-grow-left').addEventListener('click', growLeft);
+        document.getElementById('btn-shrink-left').addEventListener('click', shrinkLeft);
+        document.getElementById('btn-grow-bottom').addEventListener('click', growBottom);
+        document.getElementById('btn-shrink-bottom').addEventListener('click', shrinkBottom);
+        document.getElementById('btn-grow-top').addEventListener('click', growTop);
+        document.getElementById('btn-shrink-top').addEventListener('click', shrinkTop);
+
         window.addEventListener('keydown', function (ev) {
             if (ev.target.tagName === 'INPUT' || ev.target.tagName === 'SELECT') return;
             var ctrl = ev.ctrlKey || ev.metaKey;
@@ -636,6 +645,90 @@
             stack.push([c, r + 1]);
             stack.push([c, r - 1]);
         }
+        scheduleAutoSave();
+    }
+
+    // ---------------------------------------------------------------
+    // Resize level
+    // ---------------------------------------------------------------
+
+    function growRight() {
+        pushUndo();
+        for (var r = 0; r < state.height; r++) state.grid[r].push('.');
+        state.width++;
+        updateStatusBar();
+        redraw();
+        scheduleAutoSave();
+    }
+
+    function shrinkRight() {
+        if (state.width <= 4) { showMessage('Too small'); return; }
+        pushUndo();
+        for (var r = 0; r < state.height; r++) state.grid[r].pop();
+        state.width--;
+        updateStatusBar();
+        redraw();
+        scheduleAutoSave();
+    }
+
+    function growLeft() {
+        pushUndo();
+        for (var r = 0; r < state.height; r++) state.grid[r].unshift('.');
+        state.width++;
+        updateStatusBar();
+        redraw();
+        scheduleAutoSave();
+    }
+
+    function shrinkLeft() {
+        if (state.width <= 4) { showMessage('Too small'); return; }
+        pushUndo();
+        for (var r = 0; r < state.height; r++) state.grid[r].shift();
+        state.width--;
+        updateStatusBar();
+        redraw();
+        scheduleAutoSave();
+    }
+
+    function growBottom() {
+        pushUndo();
+        var row = [];
+        for (var c = 0; c < state.width; c++) row.push('.');
+        state.grid.push(row);
+        state.height++;
+        updateStatusBar();
+        redraw();
+        scheduleAutoSave();
+    }
+
+    function shrinkBottom() {
+        if (state.height <= 4) { showMessage('Too small'); return; }
+        pushUndo();
+        state.grid.pop();
+        state.height--;
+        updateStatusBar();
+        redraw();
+        scheduleAutoSave();
+    }
+
+    function growTop() {
+        pushUndo();
+        var row = [];
+        for (var c = 0; c < state.width; c++) row.push('.');
+        state.grid.unshift(row);
+        state.height++;
+        updateStatusBar();
+        redraw();
+        scheduleAutoSave();
+    }
+
+    function shrinkTop() {
+        if (state.height <= 4) { showMessage('Too small'); return; }
+        pushUndo();
+        state.grid.shift();
+        state.height--;
+        updateStatusBar();
+        redraw();
         scheduleAutoSave();
     }
 

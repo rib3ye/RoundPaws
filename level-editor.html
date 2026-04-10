@@ -105,6 +105,17 @@ html, body { height: 100%; overflow: hidden; background: #1a1a2e; color: #eee; f
         <button id="btn-load">Load</button>
         <button id="btn-new">New Level</button>
         <button id="btn-save" class="primary">Save to Game (Ctrl+S)</button>
+        <label>Resize</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">
+          <button id="btn-grow-right">+Col →</button>
+          <button id="btn-shrink-right">−Col →</button>
+          <button id="btn-grow-bottom">+Row ↓</button>
+          <button id="btn-shrink-bottom">−Row ↓</button>
+          <button id="btn-grow-top">+Row ↑</button>
+          <button id="btn-shrink-top">−Row ↑</button>
+          <button id="btn-grow-left">+Col ←</button>
+          <button id="btn-shrink-left">−Col ←</button>
+        </div>
       </div>
     </div>
     <div class="main" id="main-area">
