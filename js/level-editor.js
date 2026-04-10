@@ -1148,12 +1148,4 @@
     Game.Sprites.loadImages(function () {
         init();
     });
-
-    // Exposed for manual testing
-    window.__levelEditor = {
-        parse: parseLevelText,
-        serialize: serializeLevel,
-        loadText: loadLevelText,
-        state: state
-    };
 })();
