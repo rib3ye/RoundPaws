@@ -103,6 +103,37 @@ function handleRequest(req, res) {
         return;
     }
 
+    // API: save a level text file
+    if (req.method === 'POST' && req.url === '/api/save-level') {
+        var body = [];
+        req.on('data', function (chunk) { body.push(chunk); });
+        req.on('end', function () {
+            try {
+                var json = JSON.parse(Buffer.concat(body).toString());
+                var filename = path.basename(json.filename); // sanitize
+                if (!/^level[a-zA-Z0-9_-]+\.txt$/.test(filename)) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: 'Filename must match levelN.txt' }));
+                    return;
+                }
+                if (typeof json.data !== 'string') {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: 'Missing data field' }));
+                    return;
+                }
+                var filePath = path.join(ROOT, 'levels', filename);
+                fs.writeFileSync(filePath, json.data);
+                console.log('Saved levels/' + filename);
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ ok: true }));
+            } catch (e) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: e.message }));
+            }
+        });
+        return;
+    }
+
     // API: tile version (polled by game for live reload)
     if (req.method === 'GET' && req.url === '/api/tile-version') {
         res.writeHead(200, {
