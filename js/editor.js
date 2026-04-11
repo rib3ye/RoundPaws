@@ -262,12 +262,17 @@
         if (frameData[key] && frameData[key][currentFrame]) {
             pixels = clonePixels(frameData[key][currentFrame]);
         } else {
-            // Load from programmatic sprite as starting point
-            pixels = loadFromProgrammatic(currentSprite.name, currentFrame);
+            // Load from the current sprite (PNG override on disk if present,
+            // otherwise the programmatic baseline) as starting point
+            pixels = loadFromCurrentSprite(currentSprite.name, currentFrame);
         }
     }
 
-    function loadFromProgrammatic(name, frame) {
+    // Reads the current pixel data for a sprite frame via Game.Sprites.get(),
+    // which prefers the PNG override loaded from tiles/ when one exists and
+    // falls back to the programmatic baseline otherwise. Returns a 2D array
+    // of color strings (or null for transparent pixels).
+    function loadFromCurrentSprite(name, frame) {
         var src = Game.Sprites.get(name, frame);
         var w = currentSprite.w;
         var h = currentSprite.h;
@@ -416,7 +421,7 @@
             } else if (frameData[key] && frameData[key][animFrame]) {
                 px = frameData[key][animFrame];
             } else {
-                px = loadFromProgrammatic(currentSprite.name, animFrame);
+                px = loadFromCurrentSprite(currentSprite.name, animFrame);
             }
             drawPixelsToCtx(animPreviewCtx, px, w, h, 4);
         }, 200);
@@ -720,7 +725,7 @@
             if (frameData[key] && frameData[key][f]) {
                 px = frameData[key][f];
             } else {
-                px = loadFromProgrammatic(currentSprite.name, f);
+                px = loadFromCurrentSprite(currentSprite.name, f);
             }
             var c = pixelsToCanvas(px, currentSprite.w, currentSprite.h);
             var filename = getFilename(currentSprite.name, f, currentSprite.frames);
@@ -882,7 +887,7 @@
                 if (frameData[key] && frameData[key][f]) {
                     px = frameData[key][f];
                 } else {
-                    px = loadFromProgrammatic(sp.name, f);
+                    px = loadFromCurrentSprite(sp.name, f);
                 }
                 var c = pixelsToCanvas(px, sp.w, sp.h);
                 var filename = getFilename(sp.name, f, sp.frames);
@@ -1152,7 +1157,7 @@
                     if (frameData[key] && frameData[key][frameIdx]) {
                         px = frameData[key][frameIdx];
                     } else {
-                        px = loadFromProgrammatic(currentSprite.name, frameIdx);
+                        px = loadFromCurrentSprite(currentSprite.name, frameIdx);
                     }
                     var c = pixelsToCanvas(px, currentSprite.w, currentSprite.h);
                     var filename = getFilename(currentSprite.name, frameIdx, total);
@@ -1184,7 +1189,7 @@
                     if (frameData[key] && frameData[key][frameIdx]) {
                         px = frameData[key][frameIdx];
                     } else {
-                        px = loadFromProgrammatic(currentSprite.name, frameIdx);
+                        px = loadFromCurrentSprite(currentSprite.name, frameIdx);
                     }
                     var c = pixelsToCanvas(px, currentSprite.w, currentSprite.h);
                     var filename = getFilename(currentSprite.name, frameIdx, total);
@@ -1255,5 +1260,11 @@
     // Start
     // ---------------------------------------------------------------
 
-    window.addEventListener('load', init);
+    // Load PNG overrides from tiles/ before init so the editor opens
+    // with the most-recent saved sprite (not the programmatic baseline).
+    // loadImages() cache-busts with ?t=Date.now(), so refreshing the
+    // editor always fetches whatever is currently on disk.
+    window.addEventListener('load', function () {
+        Game.Sprites.loadImages(init);
+    });
 })();

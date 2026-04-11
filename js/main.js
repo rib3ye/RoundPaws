@@ -45,6 +45,10 @@ window.Game = window.Game || {};
     var carrotPickups = [];
     var barrels = [];
 
+    // Debug "No Level X" message (shown when pressing a digit for a missing level)
+    var noLevelMessage = '';
+    var noLevelTimer = 0;
+
     // ---------------------------------------------------------------
     // Level loading
     // ---------------------------------------------------------------
@@ -178,6 +182,23 @@ window.Game = window.Game || {};
             Game.Sprites.clearCache();
             Game.Sprites.loadImages(function () {});
         }
+
+        // Debug: press 1-9 to skip directly to that level
+        if (state !== 'loading') {
+            for (var d = 1; d <= 9; d++) {
+                if (Game.Input.wasKeyPressed('Digit' + d)) {
+                    if (d <= levelFiles.length) {
+                        currentLevelIndex = d - 1;
+                        loadLevel(currentLevelIndex);
+                    } else {
+                        noLevelMessage = 'No Level ' + d;
+                        noLevelTimer = 120;
+                    }
+                    break;
+                }
+            }
+        }
+        if (noLevelTimer > 0) noLevelTimer--;
 
         // Global animation timer (water, carrot bob, flag wave)
         animTimer++;
@@ -357,6 +378,11 @@ window.Game = window.Game || {};
             case 'ending':
                 Game.Ending.draw();
                 break;
+        }
+
+        // "No Level X" debug message (visible in all states while timer > 0)
+        if (noLevelTimer > 0) {
+            Game.Renderer.drawTextCentered(noLevelMessage, 108, '#ff4444', 16);
         }
 
         // Mute indicator (visible in all states)

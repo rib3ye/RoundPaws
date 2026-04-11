@@ -33,7 +33,22 @@ Game.Music = (function () {
     var BPM = 150;
     var stepTime;         // seconds per step (calculated from BPM)
     var muted = false;
-    var volume = 0.3;
+
+    // Persisted volume (0..1). Default 0.3 if nothing stored or storage unavailable.
+    var VOLUME_STORAGE_KEY = 'roundpaws.volume';
+    var volume = loadStoredVolume();
+
+    function loadStoredVolume() {
+        try {
+            var raw = localStorage.getItem(VOLUME_STORAGE_KEY);
+            if (raw === null) return 0.3;
+            var n = parseFloat(raw);
+            if (isNaN(n) || n < 0 || n > 1) return 0.3;
+            return n;
+        } catch (e) {
+            return 0.3;
+        }
+    }
 
     // Pre-allocated noise buffers (created in init, reused by drums)
     var snareNoiseBuffer = null;
@@ -835,6 +850,7 @@ Game.Music = (function () {
     function setVolume(v) {
         volume = v;
         if (masterGain && !muted) masterGain.gain.value = v;
+        try { localStorage.setItem(VOLUME_STORAGE_KEY, String(v)); } catch (e) {}
     }
 
     function toggleMute() {

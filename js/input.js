@@ -6,8 +6,9 @@
  *
  * Keyboard:
  *   A / D       — Move left / right
- *   L           — Jump / climb up
- *   S           — Climb down
+ *   W           — Climb up (on ropes)
+ *   S           — Climb down (on ropes)
+ *   L           — Jump (also leaps off ropes)
  *   K           — Throw carrot
  *   Enter/Space — Start game
  *   M           — Toggle mute
@@ -133,8 +134,9 @@ Game.Input = (function () {
         switch (action) {
             case 'left':   return keys['KeyA'] || gpState.gpLeft;
             case 'right':  return keys['KeyD'] || gpState.gpRight;
-            case 'up':     return keys['KeyL'] || gpState.gpA || gpState.gpUp;
+            case 'up':     return keys['KeyW'] || gpState.gpUp;
             case 'down':   return keys['KeyS'] || gpState.gpDown;
+            case 'jump':   return keys['KeyL'] || gpState.gpA;
             case 'throw':  return keys['KeyK'] || gpState.gpB || gpState.gpX;
             case 'start':  return keys['Enter'] || keys['Space'] || gpState.gpStart || gpState.gpA;
             case 'mute':   return keys['KeyM'];
@@ -148,8 +150,9 @@ Game.Input = (function () {
         switch (action) {
             case 'left':   return justPressed['KeyA'] || gpJustPressed.gpLeft;
             case 'right':  return justPressed['KeyD'] || gpJustPressed.gpRight;
-            case 'up':     return justPressed['KeyL'] || gpJustPressed.gpA || gpJustPressed.gpUp;
+            case 'up':     return justPressed['KeyW'] || gpJustPressed.gpUp;
             case 'down':   return justPressed['KeyS'] || gpJustPressed.gpDown;
+            case 'jump':   return justPressed['KeyL'] || gpJustPressed.gpA;
             case 'throw':  return justPressed['KeyK'] || gpJustPressed.gpB || gpJustPressed.gpX;
             case 'start':  return justPressed['Enter'] || justPressed['Space'] || gpJustPressed.gpStart || gpJustPressed.gpA;
             case 'mute':     return justPressed['KeyM'];
@@ -160,10 +163,16 @@ Game.Input = (function () {
         }
     }
 
+    /** Returns true only on the first frame the given raw key code was pressed. */
+    function wasKeyPressed(code) {
+        return !!justPressed[code];
+    }
+
     return {
         init: init,
         update: update,
         isDown: isDown,
-        wasPressed: wasPressed
+        wasPressed: wasPressed,
+        wasKeyPressed: wasKeyPressed
     };
 })();

@@ -90,7 +90,7 @@ Game.Ending = (function () {
 
     function update() {
         timer++;
-        scrollY += 0.3; // slow upward scroll
+        scrollY += 0.15; // slow upward scroll
 
         // Loop back to start when all text has scrolled past
         if (scrollY > totalTextHeight) {

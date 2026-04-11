@@ -33,7 +33,6 @@ Game.Player = (function() {
   var SLIDE_SPEED = 3.0;
   var SLIDE_DURATION = 20; // frames
 
-  var MAX_CARROTS = 5;
   var THROW_COOLDOWN = 15; // frames between throws
 
   var MAX_HEALTH = 3;
@@ -52,6 +51,7 @@ Game.Player = (function() {
   var onGround = false;
   var onRope = false;
   var jumpHeld = 0; // frames remaining for variable jump height
+  var ropeUngrabCooldown = 0; // frames during which rope auto-grab is suppressed (after leaping off)
 
   var sliding = false;
   var slideTimer = 0;
@@ -86,6 +86,7 @@ Game.Player = (function() {
     onGround = false;
     onRope = false;
     jumpHeld = 0;
+    ropeUngrabCooldown = 0;
     alive = true;
     health = MAX_HEALTH;
     invincible = 0;
@@ -122,10 +123,29 @@ Game.Player = (function() {
     if (throwCooldown > 0)
       throwCooldown--;
 
-    // Check if center of player overlaps a rope tile
-    var tileCX = Math.floor((x + width / 2) / TILE);
-    var tileCY = Math.floor((y + height / 2) / TILE);
-    onRope = Game.Level.isRope(level, tileCX, tileCY);
+    // Rope grab/release logic.
+    // Once grabbed, the rope is sticky — the player can move horizontally
+    // along it without falling off. They only release by jumping off or
+    // landing on the ground.
+    if (ropeUngrabCooldown > 0) {
+      ropeUngrabCooldown--;
+      onRope = false;
+    } else if (onRope) {
+      // Sticky grab: stay on rope unless we landed on solid ground
+      if (onGround) onRope = false;
+    } else {
+      // Not on rope yet — auto-grab if center overlaps a rope tile,
+      // but don't grab while walking through on the ground
+      var walkingOnGround = onGround && (Input.isDown('left') || Input.isDown('right'));
+      if (!walkingOnGround) {
+        var tileCX = Math.floor((x + width / 2) / TILE);
+        var tileCY = Math.floor((y + height / 2) / TILE);
+        if (Game.Level.isRope(level, tileCX, tileCY)) {
+          onRope = true;
+          vx = 0; // snap to rope, drop any running momentum
+        }
+      }
+    }
 
     // --- Movement modes (mutually exclusive) ---
 
@@ -153,6 +173,11 @@ Game.Player = (function() {
       x = 0;
       vx = 0;
     } // left boundary
+    var rightEdge = level.width * TILE - width;
+    if (x > rightEdge) {
+      x = rightEdge;
+      vx = 0;
+    } // right boundary
     resolveCollisionX(level);
 
     // Snap to whole pixel when horizontal velocity is zero to prevent jitter
@@ -208,21 +233,40 @@ Game.Player = (function() {
 
   function updateRopeMovement(Input) {
     vy = 0;
-    vx = 0;
 
+    // Up/down climbs the rope
     if (Input.isDown('up'))
       vy = -ROPE_CLIMB_SPEED;
     if (Input.isDown('down'))
       vy = ROPE_CLIMB_SPEED;
 
-    // Jump off rope sideways (jump + left/right)
-    if (Input.wasPressed('up') &&
-        (Input.isDown('left') || Input.isDown('right'))) {
+    // Left/right physically moves the player along the rope.
+    // Sticky grab keeps them attached even if they walk off the rope tile;
+    // walls still stop them via the standard X collision pass.
+    if (Input.isDown('left')) {
+      vx -= MOVE_SPEED * 0.15;
+      facing = -1;
+    } else if (Input.isDown('right')) {
+      vx += MOVE_SPEED * 0.15;
+      facing = 1;
+    }
+    vx *= FRICTION;
+    if (Math.abs(vx) > MOVE_SPEED) vx = MOVE_SPEED * Math.sign(vx);
+    if (Math.abs(vx) < 0.05) vx = 0;
+
+    // Jump button leaps off the rope. Holding left/right adds horizontal nudge.
+    if (Input.wasPressed('jump')) {
       onRope = false;
+      ropeUngrabCooldown = 20; // ~1/3 second of no auto-grab so we clear the rope
       vy = JUMP_FORCE;
       jumpHeld = JUMP_HOLD_FRAMES;
-      facing = Input.isDown('left') ? -1 : 1;
-      vx = facing * MOVE_SPEED;
+      if (Input.isDown('left')) {
+        facing = -1;
+        vx = -MOVE_SPEED;
+      } else if (Input.isDown('right')) {
+        facing = 1;
+        vx = MOVE_SPEED;
+      }
       Game.Music.sfx('jump');
     }
   }
@@ -261,14 +305,14 @@ Game.Player = (function() {
       vx = 0;
 
     // Slide attack: down + jump while on ground
-    if (Input.wasPressed('up') && onGround && Input.isDown('down')) {
+    if (Input.wasPressed('jump') && onGround && Input.isDown('down')) {
       sliding = true;
       slideTimer = SLIDE_DURATION;
       vx = facing * SLIDE_SPEED;
       Game.Music.sfx('jump');
     }
     // Normal jump
-    else if (Input.wasPressed('up') && onGround) {
+    else if (Input.wasPressed('jump') && onGround) {
       vy = JUMP_FORCE;
       onGround = false;
       jumpHeld = JUMP_HOLD_FRAMES;
@@ -276,11 +320,11 @@ Game.Player = (function() {
     }
 
     // Variable-height jump: holding jump adds lift for several frames
-    if (Input.isDown('up') && jumpHeld > 0) {
+    if (Input.isDown('jump') && jumpHeld > 0) {
       vy += JUMP_HOLD_FORCE;
       jumpHeld--;
     }
-    if (!Input.isDown('up'))
+    if (!Input.isDown('jump'))
       jumpHeld = 0;
 
     vy += GRAVITY;
@@ -372,8 +416,7 @@ Game.Player = (function() {
   }
 
   function collectCarrot() {
-    if (carrots < MAX_CARROTS)
-      carrots++;
+    carrots++;
   }
 
   // ---------------------------------------------------------------
